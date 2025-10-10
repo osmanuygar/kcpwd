@@ -4,11 +4,11 @@
 
 ## Features
 
-- 🔐 Secure storage using macOS Keychain
-- 📋 Automatic clipboard copying
-- 🚀 Simple CLI interface
-- 🔒 No passwords stored in plain text
-- 🍎 Native macOS integration
+- Secure storage using macOS Keychain
+- Automatic clipboard copying
+- Simple CLI interface
+- No passwords stored in plain text
+- Native macOS integration
 
 ## Installation
 
