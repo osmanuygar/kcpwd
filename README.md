@@ -19,7 +19,7 @@ pip install kcpwd
 
 ### From Source
 ```bash
-git clone https://github.com/yourusername/kcpwd.git
+git clone https://github.com/osmanuygar/kcpwd.git
 cd kcpwd
 pip install -e .
 ```
