@@ -12,7 +12,6 @@ from typing import Optional
 # Service name for keyring (namespace for your passwords)
 SERVICE_NAME = "kcpwd"
 
-
 def copy_to_clipboard(text: str) -> bool:
     """Copy text to macOS clipboard using pbcopy"""
     try:
