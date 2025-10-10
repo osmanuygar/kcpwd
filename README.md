@@ -94,20 +94,6 @@ pip install -e .
 pytest
 ```
 
-## Project Structure
-```
-kcpwd/
-├── kcpwd/
-│   ├── __init__.py
-│   └── cli.py
-├── tests/
-│   └── test_cli.py
-├── setup.py
-├── README.md
-├── LICENSE
-└── requirements.txt
-```
-
 ## License
 
 MIT License - See LICENSE file for details
