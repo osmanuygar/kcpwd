@@ -66,7 +66,7 @@ security find-generic-password -s "kcpwd" -a "dbadmin" -w
 
 ## Security Notes
 
-⚠️ **Important Security Considerations:**
+**Important Security Considerations:**
 
 - Passwords are stored in macOS Keychain (encrypted)
 - Passwords remain in clipboard until you copy something else
