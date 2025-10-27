@@ -5,26 +5,10 @@ Stores passwords securely in macOS Keychain and copies them to clipboard
 """
 
 import click
-import keyring
-import subprocess
-from typing import Optional
-
-# Service name for keyring (namespace for your passwords)
-SERVICE_NAME = "kcpwd"
-
-def copy_to_clipboard(text: str) -> bool:
-    """Copy text to macOS clipboard using pbcopy"""
-    try:
-        process = subprocess.Popen(
-            ['pbcopy'],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE
-        )
-        process.communicate(text.encode('utf-8'))
-        return True
-    except Exception as e:
-        click.echo(f"Error copying to clipboard: {e}", err=True)
-        return False
+from .core import set_password as _set_password
+from .core import get_password as _get_password
+from .core import delete_password as _delete_password
+from .core import SERVICE_NAME
 
 
 @click.group()
@@ -41,11 +25,10 @@ def set(key: str, password: str):
 
     Example: kcpwd set dbadmin asd123
     """
-    try:
-        keyring.set_password(SERVICE_NAME, key, password)
+    if _set_password(key, password):
         click.echo(f"✓ Password stored for '{key}'")
-    except Exception as e:
-        click.echo(f"Error storing password: {e}", err=True)
+    else:
+        click.echo(f"Error storing password", err=True)
 
 
 @cli.command()
@@ -55,20 +38,13 @@ def get(key: str):
 
     Example: kcpwd get dbadmin
     """
-    try:
-        password = keyring.get_password(SERVICE_NAME, key)
+    password = _get_password(key, copy_to_clip=True)
 
-        if password is None:
-            click.echo(f"No password found for '{key}'", err=True)
-            return
+    if password is None:
+        click.echo(f"No password found for '{key}'", err=True)
+        return
 
-        if copy_to_clipboard(password):
-            click.echo(f"✓ Password for '{key}' copied to clipboard")
-        else:
-            click.echo(f"Failed to copy password to clipboard", err=True)
-
-    except Exception as e:
-        click.echo(f"Error retrieving password: {e}", err=True)
+    click.echo(f"✓ Password for '{key}' copied to clipboard")
 
 
 @cli.command()
@@ -79,18 +55,10 @@ def delete(key: str):
 
     Example: kcpwd delete dbadmin
     """
-    try:
-        password = keyring.get_password(SERVICE_NAME, key)
-
-        if password is None:
-            click.echo(f"No password found for '{key}'", err=True)
-            return
-
-        keyring.delete_password(SERVICE_NAME, key)
+    if _delete_password(key):
         click.echo(f"✓ Password for '{key}' deleted")
-
-    except Exception as e:
-        click.echo(f"Error deleting password: {e}", err=True)
+    else:
+        click.echo(f"No password found for '{key}'", err=True)
 
 
 @cli.command()
