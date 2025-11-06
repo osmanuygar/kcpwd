@@ -1,8 +1,9 @@
 import pytest
 from click.testing import CliRunner
 from kcpwd.cli import cli
-from kcpwd import set_password, get_password, delete_password, require_password
+from kcpwd import set_password, get_password, delete_password, require_password, generate_password
 import keyring
+import re
 
 SERVICE_NAME = "kcpwd"
 
@@ -185,3 +186,126 @@ def test_require_password_decorator_with_provided_password(cleanup):
     # Call with explicit password - should use provided one
     result = test_function(password="manual_pass")
     assert result == "manual_pass"
+
+
+# ===== Password Generation Tests =====
+
+def test_generate_password_default():
+    """Test password generation with default settings"""
+    password = generate_password()
+    assert len(password) == 16
+    assert any(c.isupper() for c in password)
+    assert any(c.islower() for c in password)
+    assert any(c.isdigit() for c in password)
+    assert any(c in "!@#$%^&*()-_=+[]{}|;:,.<>?" for c in password)
+
+
+def test_generate_password_custom_length():
+    """Test password generation with custom length"""
+    password = generate_password(length=20)
+    assert len(password) == 20
+
+    password = generate_password(length=8)
+    assert len(password) == 8
+
+
+def test_generate_password_no_symbols():
+    """Test password generation without symbols"""
+    password = generate_password(length=16, use_symbols=False)
+    assert len(password) == 16
+    assert not any(c in "!@#$%^&*()-_=+[]{}|;:,.<>?" for c in password)
+    assert any(c.isupper() for c in password)
+    assert any(c.islower() for c in password)
+    assert any(c.isdigit() for c in password)
+
+
+def test_generate_password_digits_only():
+    """Test generating numeric PIN"""
+    pin = generate_password(
+        length=6,
+        use_uppercase=False,
+        use_lowercase=False,
+        use_symbols=False
+    )
+    assert len(pin) == 6
+    assert pin.isdigit()
+
+
+def test_generate_password_exclude_ambiguous():
+    """Test password generation excluding ambiguous characters"""
+    # Generate many passwords to check
+    for _ in range(10):
+        password = generate_password(length=20, exclude_ambiguous=True)
+        assert 'O' not in password
+        assert 'I' not in password
+        assert 'l' not in password
+        assert '0' not in password
+        assert '1' not in password
+
+
+def test_generate_password_minimum_length():
+    """Test password generation with minimum length requirement"""
+    with pytest.raises(ValueError, match="at least 4 characters"):
+        generate_password(length=3)
+
+
+def test_generate_password_no_character_types():
+    """Test that at least one character type must be enabled"""
+    with pytest.raises(ValueError, match="At least one character type"):
+        generate_password(
+            use_uppercase=False,
+            use_lowercase=False,
+            use_digits=False,
+            use_symbols=False
+        )
+
+
+def test_generate_password_contains_all_types():
+    """Test that generated password contains at least one of each enabled type"""
+    password = generate_password(length=16)
+    assert any(c.isupper() for c in password), "Should contain uppercase"
+    assert any(c.islower() for c in password), "Should contain lowercase"
+    assert any(c.isdigit() for c in password), "Should contain digit"
+    assert any(c in "!@#$%^&*()-_=+[]{}|;:,.<>?" for c in password), "Should contain symbol"
+
+
+def test_generate_password_randomness():
+    """Test that generated passwords are different (randomness)"""
+    passwords = [generate_password(length=16) for _ in range(10)]
+    # All passwords should be unique
+    assert len(set(passwords)) == 10
+
+
+def test_generate_command_cli(runner):
+    """Test generate command via CLI"""
+    result = runner.invoke(cli, ['generate'])
+    assert result.exit_code == 0
+    assert "Generated password:" in result.output
+    assert "Copied to clipboard" in result.output
+
+
+def test_generate_command_cli_custom_length(runner):
+    """Test generate command with custom length via CLI"""
+    result = runner.invoke(cli, ['generate', '-l', '20'])
+    assert result.exit_code == 0
+    assert "Generated password:" in result.output
+
+
+def test_generate_command_cli_no_symbols(runner):
+    """Test generate command without symbols via CLI"""
+    result = runner.invoke(cli, ['generate', '--no-symbols'])
+    assert result.exit_code == 0
+    assert "Generated password:" in result.output
+
+
+def test_generate_command_cli_with_save(runner, cleanup):
+    """Test generate command with save option via CLI"""
+    result = runner.invoke(cli, ['generate', '-s', 'testkey'])
+    assert result.exit_code == 0
+    assert "Generated password:" in result.output
+    assert "Saved as 'testkey'" in result.output
+
+    # Verify it was saved
+    stored = keyring.get_password(SERVICE_NAME, "testkey")
+    assert stored is not None
+    assert len(stored) == 16
