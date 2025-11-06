@@ -281,12 +281,16 @@ This is a personal password manager tool. While it uses secure storage (macOS Ke
 
 - [x] Python library support
 - [x] Decorator for automatic password injection
-- [ ] Master password protection
-- [ ] Auto-clear clipboard after X seconds
 - [ ] Password generation
 - [ ] Import/export functionality
+- [ ] Master password protection
 - [ ] Password strength indicator
 - [ ] Cross-platform support (Linux, Windows)
+- [ ] GUI web UI application
+- [ ] Multi Node/user support
+- [ ] Integration with other password managers
+- [ ] Two-factor authentication support
+- [ ] MultiSite password management
 
 ## Changelog
 
