@@ -6,6 +6,7 @@
 
 -  Secure storage using macOS Keychain
 -  Automatic clipboard copying
+-  Cryptographically secure password generation
 -  Simple CLI interface
 -  Python library for programmatic access
 -  Decorator support for automatic password injection
@@ -45,6 +46,27 @@ kcpwd get dbadmin
 kcpwd delete dbadmin
 ```
 
+#### Generate a secure password
+```bash
+# Generate a 16-character password (default)
+kcpwd generate
+
+# Generate a 20-character password
+kcpwd generate -l 20
+
+# Generate without symbols (alphanumeric only)
+kcpwd generate --no-symbols
+
+# Generate and save immediately
+kcpwd generate -s myapi
+
+# Generate a 6-digit PIN
+kcpwd generate -l 6 --no-uppercase --no-lowercase --no-symbols
+
+# Generate without ambiguous characters (no 0/O, 1/l/I)
+kcpwd generate --exclude-ambiguous
+```
+
 #### List stored keys
 ```bash
 kcpwd list
@@ -63,6 +85,41 @@ set_password("my_database", "secret123")
 # Retrieve a password
 password = get_password("my_database")
 print(password)  # Output: secret123
+
+# Retrieve and copy to clipboard
+password = get_password("my_database", copy_to_clip=True)
+
+# Delete a password
+delete_password("my_database")
+```
+
+```python
+from kcpwd import set_password, get_password, delete_password, generate_password
+
+# Generate a secure password
+password = generate_password(length=20)
+print(password)  # Output: 'aB3#xK9!mL2$nP5@qR7&'
+
+# Generate alphanumeric password (no symbols)
+password = generate_password(length=16, use_symbols=False)
+print(password)  # Output: 'aB3xK9mL2nP5qR7t'
+
+# Generate a 6-digit PIN
+pin = generate_password(
+    length=6, 
+    use_uppercase=False, 
+    use_lowercase=False, 
+    use_symbols=False
+)
+print(pin)  # Output: '384729'
+
+# Generate and store
+password = generate_password(length=20)
+set_password("my_database", password)
+
+# Retrieve a password
+password = get_password("my_database")
+print(password)  # Output: the stored password
 
 # Retrieve and copy to clipboard
 password = get_password("my_database", copy_to_clip=True)
@@ -226,6 +283,17 @@ Delete a password from macOS Keychain.
 Copy text to macOS clipboard.
 - Returns `True` if successful, `False` otherwise
 
+#### `generate_password(length=16, use_uppercase=True, use_lowercase=True, use_digits=True, use_symbols=True, exclude_ambiguous=False) -> str`
+Generate a cryptographically secure random password.
+- `length`: Password length (minimum 4)
+- `use_uppercase`: Include uppercase letters
+- `use_lowercase`: Include lowercase letters  
+- `use_digits`: Include digits
+- `use_symbols`: Include symbols (!@#$%^&*...)
+- `exclude_ambiguous`: Exclude ambiguous characters (0/O, 1/l/I)
+- Returns generated password string
+
+
 ### Decorators
 
 #### `@require_password(key: str, param_name: str = 'password')`
@@ -248,7 +316,7 @@ Decorator that automatically injects password from keychain into function parame
 ## Requirements
 
 - **macOS only** (uses native Keychain)
-- Python 3.8+
+- Python 3.6+ (secrets module built-in from 3.6)
 
 ## Development
 
@@ -281,7 +349,7 @@ This is a personal password manager tool. While it uses secure storage (macOS Ke
 
 - [x] Python library support
 - [x] Decorator for automatic password injection
-- [ ] Password generation
+- [x] Password generation
 - [ ] Import/export functionality
 - [ ] Master password protection
 - [ ] Password strength indicator
@@ -293,6 +361,13 @@ This is a personal password manager tool. While it uses secure storage (macOS Ke
 - [ ] MultiSite password management
 
 ## Changelog
+
+### v0.2.1
+- Added cryptographically secure password generation (`generate` command)
+- Generate passwords with customizable length and character types
+- Option to exclude ambiguous characters (0/O, 1/l/I)
+- Generate and save passwords in one command
+- Comprehensive password generation tests
 
 ### v0.2.0
 - Added Python library support
