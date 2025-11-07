@@ -5,10 +5,14 @@ Stores passwords securely in macOS Keychain and copies them to clipboard
 """
 
 import click
+import os
 from .core import set_password as _set_password
 from .core import get_password as _get_password
 from .core import delete_password as _delete_password
 from .core import generate_password as _generate_password
+from .core import list_all_keys as _list_all_keys
+from .core import export_passwords as _export_passwords
+from .core import import_passwords as _import_passwords
 from .core import SERVICE_NAME
 
 
@@ -66,11 +70,21 @@ def delete(key: str):
 def list():
     """List all stored password keys (not the actual passwords)
 
-    Note: Due to Keychain limitations, this requires manual Keychain access
+    Example: kcpwd list
     """
-    click.echo("To view all stored keys, open Keychain Access app:")
-    click.echo(f"  Search for: {SERVICE_NAME}")
-    click.echo("\nAlternatively, use: security find-generic-password -s kcpwd")
+    keys = _list_all_keys()
+
+    if not keys:
+        click.echo("No passwords stored yet")
+        click.echo(f"\nTo add a password: kcpwd set <key> <password>")
+        return
+
+    click.echo(f"Found {len(keys)} stored password(s):\n")
+    for key in keys:
+        click.echo(f"  • {key}")
+
+    click.echo(f"\nTo retrieve: kcpwd get <key>")
+    click.echo(f"To delete: kcpwd delete <key>")
 
 
 @cli.command()
@@ -124,6 +138,84 @@ def generate(length, no_uppercase, no_lowercase, no_digits, no_symbols, exclude_
         click.echo(f"Error: {e}", err=True)
     except Exception as e:
         click.echo(f"Error generating password: {e}", err=True)
+
+
+@cli.command()
+@click.argument('filepath', type=click.Path())
+@click.option('--keys-only', is_flag=True, help='Export only keys without passwords')
+@click.option('--force', '-f', is_flag=True, help='Overwrite existing file without confirmation')
+def export(filepath: str, keys_only: bool, force: bool):
+    """Export all passwords to a JSON file
+
+    WARNING: Exported file contains passwords in PLAIN TEXT!
+    Keep the file secure and delete it after use.
+
+    Examples:
+        kcpwd export backup.json                # Export with passwords
+        kcpwd export keys.json --keys-only      # Export only key names
+        kcpwd export backup.json -f             # Force overwrite
+    """
+    # Check if file exists
+    if os.path.exists(filepath) and not force:
+        if not click.confirm(f"File '{filepath}' already exists. Overwrite?"):
+            click.echo("Export cancelled")
+            return
+
+    # Security warning for full export
+    if not keys_only:
+        click.echo(click.style("⚠️  WARNING: Exported file will contain passwords in PLAIN TEXT!",
+                               fg='yellow', bold=True))
+        click.echo("Make sure to:")
+        click.echo("  • Store the file in a secure location")
+        click.echo("  • Delete it after use")
+        click.echo("  • Never commit it to version control\n")
+
+        if not click.confirm("Do you want to continue?"):
+            click.echo("Export cancelled")
+            return
+
+    # Perform export
+    result = _export_passwords(filepath, include_passwords=not keys_only)
+
+    if result['success']:
+        click.echo(f"✓ {result['message']}")
+
+        if result['failed_keys']:
+            click.echo(f"\n⚠️  Failed to export: {', '.join(result['failed_keys'])}", err=True)
+    else:
+        click.echo(f"✗ {result['message']}", err=True)
+
+
+@cli.command(name='import')
+@click.argument('filepath', type=click.Path(exists=True))
+@click.option('--overwrite', is_flag=True, help='Overwrite existing passwords')
+@click.option('--dry-run', is_flag=True, help='Show what would be imported without making changes')
+def import_cmd(filepath: str, overwrite: bool, dry_run: bool):
+    """Import passwords from a JSON file
+
+    Examples:
+        kcpwd import backup.json                # Import, skip existing
+        kcpwd import backup.json --overwrite    # Import, overwrite existing
+        kcpwd import backup.json --dry-run      # Preview import
+    """
+    # Perform import
+    result = _import_passwords(filepath, overwrite=overwrite, dry_run=dry_run)
+
+    if result['success']:
+        click.echo(f"✓ {result['message']}")
+
+        if result['skipped_keys']:
+            click.echo(f"\n📋 Skipped existing keys ({len(result['skipped_keys'])}):")
+            for key in result['skipped_keys'][:10]:  # Show first 10
+                click.echo(f"  • {key}")
+            if len(result['skipped_keys']) > 10:
+                click.echo(f"  ... and {len(result['skipped_keys']) - 10} more")
+            click.echo("\nUse --overwrite to replace existing passwords")
+
+        if result['failed_keys']:
+            click.echo(f"\n⚠️  Failed to import: {', '.join(result['failed_keys'])}", err=True)
+    else:
+        click.echo(f"✗ {result['message']}", err=True)
 
 
 if __name__ == '__main__':

@@ -1,7 +1,13 @@
 import pytest
+import os
+import json
+import tempfile
 from click.testing import CliRunner
 from kcpwd.cli import cli
-from kcpwd import set_password, get_password, delete_password, require_password, generate_password
+from kcpwd import (
+    set_password, get_password, delete_password, require_password,
+    generate_password, list_all_keys, export_passwords, import_passwords
+)
 import keyring
 import re
 
@@ -19,10 +25,23 @@ def cleanup():
     """Cleanup test data after each test"""
     yield
     # Clean up test passwords after each test
-    try:
-        keyring.delete_password(SERVICE_NAME, "testkey")
-    except:
-        pass
+    test_keys = ["testkey", "testkey1", "testkey2", "testkey3"]
+    for key in test_keys:
+        try:
+            keyring.delete_password(SERVICE_NAME, key)
+        except:
+            pass
+
+
+@pytest.fixture
+def temp_json_file():
+    """Create a temporary JSON file for testing"""
+    fd, path = tempfile.mkstemp(suffix='.json')
+    os.close(fd)
+    yield path
+    # Cleanup
+    if os.path.exists(path):
+        os.remove(path)
 
 
 # ===== CLI Tests =====
@@ -71,11 +90,16 @@ def test_delete_password_cli(runner, cleanup):
     assert stored is None
 
 
-def test_list_command_cli(runner):
+def test_list_command_cli(runner, cleanup):
     """Test list command via CLI"""
+    # Add some passwords
+    keyring.set_password(SERVICE_NAME, "testkey1", "pass1")
+    keyring.set_password(SERVICE_NAME, "testkey2", "pass2")
+
     result = runner.invoke(cli, ['list'])
     assert result.exit_code == 0
-    assert "Keychain Access" in result.output or "security find-generic-password" in result.output
+    # Should show count or keys
+    assert "testkey1" in result.output or "stored password" in result.output
 
 
 # ===== Library Tests =====
@@ -124,6 +148,19 @@ def test_delete_nonexistent_password_lib():
     """Test deleting a password that doesn't exist via library"""
     result = delete_password("nonexistent")
     assert result == False
+
+
+def test_list_all_keys_lib(cleanup):
+    """Test listing all keys via library"""
+    # Add some passwords
+    set_password("testkey1", "pass1")
+    set_password("testkey2", "pass2")
+
+    keys = list_all_keys()
+
+    # Should contain our test keys
+    assert "testkey1" in keys
+    assert "testkey2" in keys
 
 
 # ===== Decorator Tests =====
@@ -309,3 +346,241 @@ def test_generate_command_cli_with_save(runner, cleanup):
     stored = keyring.get_password(SERVICE_NAME, "testkey")
     assert stored is not None
     assert len(stored) == 16
+
+
+# ===== Import/Export Tests =====
+
+def test_export_passwords_lib(cleanup, temp_json_file):
+    """Test exporting passwords via library"""
+    # Setup: create some passwords
+    set_password("testkey1", "password1")
+    set_password("testkey2", "password2")
+
+    # Export
+    result = export_passwords(temp_json_file)
+
+    assert result['success'] == True
+    assert result['exported_count'] >= 2
+    assert os.path.exists(temp_json_file)
+
+    # Verify file content
+    with open(temp_json_file, 'r') as f:
+        data = json.load(f)
+
+    assert 'passwords' in data
+    assert 'exported_at' in data
+    assert data['service'] == SERVICE_NAME
+    assert len(data['passwords']) >= 2
+
+
+def test_export_passwords_keys_only(cleanup, temp_json_file):
+    """Test exporting only keys without passwords"""
+    # Setup
+    set_password("testkey1", "password1")
+
+    # Export keys only
+    result = export_passwords(temp_json_file, include_passwords=False)
+
+    assert result['success'] == True
+
+    # Verify file content
+    with open(temp_json_file, 'r') as f:
+        data = json.load(f)
+
+    assert data['include_passwords'] == False
+    assert 'password' not in data['passwords'][0]
+    assert 'key' in data['passwords'][0]
+
+
+def test_import_passwords_lib(cleanup, temp_json_file):
+    """Test importing passwords via library"""
+    # Create export file
+    export_data = {
+        'exported_at': '2025-01-15T10:00:00',
+        'service': SERVICE_NAME,
+        'version': '0.3.0',
+        'include_passwords': True,
+        'passwords': [
+            {'key': 'testkey1', 'password': 'password1'},
+            {'key': 'testkey2', 'password': 'password2'}
+        ]
+    }
+
+    with open(temp_json_file, 'w') as f:
+        json.dump(export_data, f)
+
+    # Import
+    result = import_passwords(temp_json_file)
+
+    assert result['success'] == True
+    assert result['imported_count'] == 2
+
+    # Verify passwords were imported
+    assert get_password('testkey1') == 'password1'
+    assert get_password('testkey2') == 'password2'
+
+
+def test_import_passwords_skip_existing(cleanup, temp_json_file):
+    """Test that import skips existing passwords by default"""
+    # Setup: create existing password
+    set_password('testkey1', 'existing_password')
+
+    # Create export file
+    export_data = {
+        'exported_at': '2025-01-15T10:00:00',
+        'service': SERVICE_NAME,
+        'version': '0.3.0',
+        'include_passwords': True,
+        'passwords': [
+            {'key': 'testkey1', 'password': 'new_password'},
+            {'key': 'testkey2', 'password': 'password2'}
+        ]
+    }
+
+    with open(temp_json_file, 'w') as f:
+        json.dump(export_data, f)
+
+    # Import without overwrite
+    result = import_passwords(temp_json_file, overwrite=False)
+
+    assert result['success'] == True
+    assert 'testkey1' in result['skipped_keys']
+
+    # Verify existing password wasn't changed
+    assert get_password('testkey1') == 'existing_password'
+    # Verify new password was added
+    assert get_password('testkey2') == 'password2'
+
+
+def test_import_passwords_with_overwrite(cleanup, temp_json_file):
+    """Test importing with overwrite flag"""
+    # Setup: create existing password
+    set_password('testkey1', 'old_password')
+
+    # Create export file
+    export_data = {
+        'exported_at': '2025-01-15T10:00:00',
+        'service': SERVICE_NAME,
+        'version': '0.3.0',
+        'include_passwords': True,
+        'passwords': [
+            {'key': 'testkey1', 'password': 'new_password'}
+        ]
+    }
+
+    with open(temp_json_file, 'w') as f:
+        json.dump(export_data, f)
+
+    # Import with overwrite
+    result = import_passwords(temp_json_file, overwrite=True)
+
+    assert result['success'] == True
+    assert result['imported_count'] == 1
+
+    # Verify password was overwritten
+    assert get_password('testkey1') == 'new_password'
+
+
+def test_import_passwords_dry_run(cleanup, temp_json_file):
+    """Test dry run import"""
+    # Create export file
+    export_data = {
+        'exported_at': '2025-01-15T10:00:00',
+        'service': SERVICE_NAME,
+        'version': '0.3.0',
+        'include_passwords': True,
+        'passwords': [
+            {'key': 'testkey1', 'password': 'password1'}
+        ]
+    }
+
+    with open(temp_json_file, 'w') as f:
+        json.dump(export_data, f)
+
+    # Dry run
+    result = import_passwords(temp_json_file, dry_run=True)
+
+    assert result['success'] == True
+    assert result['imported_count'] == 1
+
+    # Verify nothing was actually imported
+    assert get_password('testkey1') is None
+
+
+def test_export_command_cli(runner, cleanup, temp_json_file):
+    """Test export command via CLI"""
+    # Setup
+    set_password("testkey1", "password1")
+
+    # Export
+    result = runner.invoke(cli, ['export', temp_json_file, '-f'], input='y\n')
+    assert result.exit_code == 0
+    assert os.path.exists(temp_json_file)
+
+
+def test_import_command_cli(runner, cleanup, temp_json_file):
+    """Test import command via CLI"""
+    # Create export file
+    export_data = {
+        'exported_at': '2025-01-15T10:00:00',
+        'service': SERVICE_NAME,
+        'version': '0.3.0',
+        'include_passwords': True,
+        'passwords': [
+            {'key': 'testkey1', 'password': 'password1'}
+        ]
+    }
+
+    with open(temp_json_file, 'w') as f:
+        json.dump(export_data, f)
+
+    # Import
+    result = runner.invoke(cli, ['import', temp_json_file])
+    assert result.exit_code == 0
+    assert "Imported" in result.output or "Would import" in result.output
+
+    # Verify
+    assert get_password('testkey1') == 'password1'
+
+
+def test_export_invalid_file():
+    """Test export with invalid file path"""
+    result = export_passwords('/invalid/path/file.json')
+    assert result['success'] == False
+
+
+def test_import_nonexistent_file():
+    """Test import with non-existent file"""
+    result = import_passwords('/nonexistent/file.json')
+    assert result['success'] == False
+    assert 'not found' in result['message'].lower()
+
+
+def test_import_invalid_json(temp_json_file):
+    """Test import with invalid JSON file"""
+    with open(temp_json_file, 'w') as f:
+        f.write("not valid json{}")
+
+    result = import_passwords(temp_json_file)
+    assert result['success'] == False
+    assert 'JSON' in result['message']
+
+
+def test_import_keys_only_file(temp_json_file):
+    """Test that importing keys-only file fails appropriately"""
+    export_data = {
+        'exported_at': '2025-01-15T10:00:00',
+        'service': SERVICE_NAME,
+        'version': '0.3.0',
+        'include_passwords': False,
+        'passwords': [
+            {'key': 'testkey1'}
+        ]
+    }
+
+    with open(temp_json_file, 'w') as f:
+        json.dump(export_data, f)
+
+    result = import_passwords(temp_json_file)
+    assert result['success'] == False
+    assert 'only keys' in result['message'].lower()
