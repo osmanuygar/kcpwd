@@ -7,6 +7,7 @@
 -  Secure storage using macOS Keychain
 -  Automatic clipboard copying
 -  Cryptographically secure password generation
+-  **Import/Export functionality for backups**
 -  Simple CLI interface
 -  Python library for programmatic access
 -  Decorator support for automatic password injection
@@ -46,6 +47,13 @@ kcpwd get dbadmin
 kcpwd delete dbadmin
 ```
 
+#### List all stored passwords
+```bash
+kcpwd list
+```
+
+**Note:** The `list` command uses `security dump-keychain` which may take a few seconds and requires access to your keychain. If it shows "No passwords stored" but you know you have passwords, try using Keychain Access app to verify.
+
 #### Generate a secure password
 ```bash
 # Generate a 16-character password (default)
@@ -67,9 +75,30 @@ kcpwd generate -l 6 --no-uppercase --no-lowercase --no-symbols
 kcpwd generate --exclude-ambiguous
 ```
 
-#### List stored keys
+#### Export passwords (NEW!)
 ```bash
-kcpwd list
+# Export all passwords to a JSON file
+kcpwd export backup.json
+
+# Export only key names (without passwords)
+kcpwd export keys.json --keys-only
+
+# Force overwrite existing file
+kcpwd export backup.json -f
+```
+
+** Security Warning**: Exported files contain passwords in **PLAIN TEXT**. Keep them secure!
+
+#### Import passwords (NEW!)
+```bash
+# Import passwords (skip existing keys)
+kcpwd import backup.json
+
+# Import and overwrite existing passwords
+kcpwd import backup.json --overwrite
+
+# Preview what would be imported without making changes
+kcpwd import backup.json --dry-run
 ```
 
 ### Library Usage
@@ -93,8 +122,10 @@ password = get_password("my_database", copy_to_clip=True)
 delete_password("my_database")
 ```
 
+#### Password Generation
+
 ```python
-from kcpwd import set_password, get_password, delete_password, generate_password
+from kcpwd import generate_password
 
 # Generate a secure password
 password = generate_password(length=20)
@@ -112,20 +143,45 @@ pin = generate_password(
     use_symbols=False
 )
 print(pin)  # Output: '384729'
+```
 
-# Generate and store
-password = generate_password(length=20)
-set_password("my_database", password)
+#### List All Keys (NEW!)
 
-# Retrieve a password
-password = get_password("my_database")
-print(password)  # Output: the stored password
+```python
+from kcpwd import list_all_keys
 
-# Retrieve and copy to clipboard
-password = get_password("my_database", copy_to_clip=True)
+# Get all stored password keys
+keys = list_all_keys()
+print(keys)  # Output: ['my_database', 'api_key', 'email_password']
 
-# Delete a password
-delete_password("my_database")
+# Check if a specific key exists
+if 'my_database' in list_all_keys():
+    print("Database password exists!")
+```
+
+#### Export/Import (NEW!)
+
+```python
+from kcpwd import export_passwords, import_passwords
+
+# Export all passwords
+result = export_passwords('backup.json')
+print(f"Exported {result['exported_count']} passwords")
+
+# Export only keys (without passwords)
+result = export_passwords('keys_only.json', include_passwords=False)
+
+# Import passwords (skip existing)
+result = import_passwords('backup.json')
+print(f"Imported {result['imported_count']} passwords")
+print(f"Skipped {len(result['skipped_keys'])} existing keys")
+
+# Import with overwrite
+result = import_passwords('backup.json', overwrite=True)
+
+# Dry run to preview import
+result = import_passwords('backup.json', dry_run=True)
+print(result['message'])
 ```
 
 #### Using Decorators (Recommended!)
@@ -201,46 +257,107 @@ conn = get_db_connection(
 )
 ```
 
-**API Client:**
+**Backup Script:**
 ```python
-import requests
-from kcpwd import require_password, set_password
+from kcpwd import export_passwords, import_passwords
+import os
+from datetime import datetime
 
-# Setup
-set_password("api_token", "sk-xxxxxxxxxx")
+def backup_passwords():
+    """Create a timestamped backup of all passwords"""
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    backup_file = f'passwords_backup_{timestamp}.json'
+    
+    result = export_passwords(backup_file)
+    
+    if result['success']:
+        print(f"✓ Backup created: {backup_file}")
+        print(f"  Exported {result['exported_count']} passwords")
+        
+        # Move to secure location
+        secure_dir = os.path.expanduser('~/Documents/Backups')
+        os.makedirs(secure_dir, exist_ok=True)
+        os.rename(backup_file, os.path.join(secure_dir, backup_file))
+    else:
+        print(f"✗ Backup failed: {result['message']}")
 
-@require_password('api_token', param_name='token')
-def make_api_request(endpoint, token=None):
-    headers = {"Authorization": f"Bearer {token}"}
-    response = requests.get(f"https://api.example.com{endpoint}", headers=headers)
-    return response.json()
-
-# Token is automatically injected
-data = make_api_request("/users")
+def restore_passwords(backup_file):
+    """Restore passwords from a backup"""
+    # Preview first
+    result = import_passwords(backup_file, dry_run=True)
+    print(f"Preview: {result['message']}")
+    
+    # Confirm
+    if input("Continue with import? (y/n): ").lower() == 'y':
+        result = import_passwords(backup_file, overwrite=True)
+        print(f"✓ {result['message']}")
+    else:
+        print("Import cancelled")
 ```
 
-**Email Sender:**
+**Migration Script:**
 ```python
-import smtplib
-from kcpwd import require_password, set_password
+from kcpwd import export_passwords, import_passwords, list_all_keys
 
-# Store email password
-set_password("email_password", "your_email_password")
-
-@require_password('email_password')
-def send_email(to, subject, body, password=None):
-    server = smtplib.SMTP('smtp.gmail.com', 587)
-    server.starttls()
-    server.login("your_email@gmail.com", password)
+def migrate_to_new_machine(export_path='~/migration.json'):
+    """Export passwords for migration to a new machine"""
+    export_path = os.path.expanduser(export_path)
     
-    message = f"Subject: {subject}\n\n{body}"
-    server.sendmail("your_email@gmail.com", to, message)
-    server.quit()
+    result = export_passwords(export_path)
     
-    return "Email sent!"
+    if result['success']:
+        print(f"✓ Exported {result['exported_count']} passwords")
+        print(f"  File: {export_path}")
+        print("\nOn your new machine, run:")
+        print(f"  kcpwd import {export_path}")
+    else:
+        print(f"✗ Export failed: {result['message']}")
 
-# Password automatically retrieved
-send_email("friend@example.com", "Hello", "How are you?")
+def complete_migration(import_path='~/migration.json'):
+    """Complete migration on new machine"""
+    import_path = os.path.expanduser(import_path)
+    
+    # Check existing passwords
+    existing = list_all_keys()
+    if existing:
+        print(f"Found {len(existing)} existing passwords")
+        print("Use --overwrite to replace them")
+    
+    # Import
+    result = import_passwords(import_path)
+    
+    if result['success']:
+        print(f"✓ {result['message']}")
+        
+        # Clean up migration file
+        if input("Delete migration file? (y/n): ").lower() == 'y':
+            os.remove(import_path)
+            print("✓ Migration file deleted")
+    else:
+        print(f"✗ Import failed: {result['message']}")
+```
+
+## Export File Format
+
+The export JSON file has the following structure:
+
+```json
+{
+  "exported_at": "2025-01-15T10:30:00.123456",
+  "service": "kcpwd",
+  "version": "0.3.0",
+  "include_passwords": true,
+  "passwords": [
+    {
+      "key": "my_database",
+      "password": "secret123"
+    },
+    {
+      "key": "api_key",
+      "password": "sk-xxxxxxxxxxxxx"
+    }
+  ]
+}
 ```
 
 ## How It Works
@@ -279,6 +396,23 @@ Retrieve a password from macOS Keychain.
 Delete a password from macOS Keychain.
 - Returns `True` if successful, `False` otherwise
 
+#### `list_all_keys() -> List[str]`
+List all stored password keys from macOS Keychain.
+- Returns list of key names
+
+#### `export_passwords(filepath: str, include_passwords: bool = True) -> Dict`
+Export all passwords to a JSON file.
+- `filepath`: Path to output JSON file
+- `include_passwords`: If `True`, include passwords; if `False`, only keys
+- Returns dict with `success`, `exported_count`, `failed_keys`, `message`
+
+#### `import_passwords(filepath: str, overwrite: bool = False, dry_run: bool = False) -> Dict`
+Import passwords from a JSON file.
+- `filepath`: Path to JSON file to import
+- `overwrite`: If `True`, overwrite existing passwords
+- `dry_run`: If `True`, preview without importing
+- Returns dict with `success`, `imported_count`, `skipped_keys`, `failed_keys`, `message`
+
 #### `copy_to_clipboard(text: str) -> bool`
 Copy text to macOS clipboard.
 - Returns `True` if successful, `False` otherwise
@@ -307,16 +441,19 @@ Decorator that automatically injects password from keychain into function parame
 **Important Security Considerations:**
 
 -  Passwords are stored in macOS Keychain (encrypted)
+-  **Export files contain passwords in PLAIN TEXT** - keep them secure!
 -  Passwords remain in clipboard until you copy something else
 -  Consider clearing clipboard after use for sensitive passwords
 -  Designed for personal use on trusted devices
 -  Always use strong, unique passwords
 -  Decorator usage means password is in memory during function execution
+-  Delete export files after use or store them encrypted
+-  Never commit export files to version control
 
 ## Requirements
 
 - **macOS only** (uses native Keychain)
-- Python 3.6+ (secrets module built-in from 3.6)
+- Python 3.8+ 
 
 ## Development
 
@@ -325,6 +462,7 @@ Decorator that automatically injects password from keychain into function parame
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+pip install -r requirements-dev.txt
 pip install -e .
 ```
 
@@ -332,6 +470,36 @@ pip install -e .
 ```bash
 pytest
 ```
+
+## Troubleshooting
+
+### `kcpwd list` shows "No passwords stored" but passwords exist
+
+The `list` command uses `security dump-keychain` which:
+- May take 5-10 seconds to complete
+- Requires keychain access permissions
+- May not work if keychain is locked
+
+**Solutions:**
+1. Make sure your keychain is unlocked
+2. Try accessing passwords directly: `kcpwd get <keyname>`
+3. Use Keychain Access app: Open Keychain Access → Search for "kcpwd"
+4. Check with terminal: `security find-generic-password -s kcpwd`
+
+If you can get passwords with `kcpwd get` but `list` doesn't work, your passwords are safe and accessible - the list feature just has trouble parsing `security dump-keychain` output on some macOS versions.
+
+### Export fails or returns empty
+
+If `kcpwd export` shows 0 passwords exported but you have passwords:
+1. Unlock your keychain
+2. The export depends on `list_all_keys()` - use the workarounds above
+3. Alternatively, manually export keys you know: Store them in a text file and import later
+
+### Import issues
+
+- **"Cannot import: file contains only keys"**: The export file was created with `--keys-only` flag. Re-export with passwords.
+- **"Invalid JSON"**: Check file format, make sure it's valid JSON
+- **Skipped existing**: This is normal with default behavior. Use `--overwrite` to replace existing passwords
 
 ## License
 
@@ -350,7 +518,7 @@ This is a personal password manager tool. While it uses secure storage (macOS Ke
 - [x] Python library support
 - [x] Decorator for automatic password injection
 - [x] Password generation
-- [ ] Import/export functionality
+- [x] Import/export functionality
 - [ ] Master password protection
 - [ ] Password strength indicator
 - [ ] Cross-platform support (Linux, Windows)
@@ -359,8 +527,17 @@ This is a personal password manager tool. While it uses secure storage (macOS Ke
 - [ ] Integration with other password managers
 - [ ] Two-factor authentication support
 - [ ] MultiSite password management
+- [ ] Encrypted export files
 
 ## Changelog
+
+### v0.3.0
+- Added import/export functionality for password backups
+- Added `list` command to display all stored keys
+- Added `list_all_keys()` function for programmatic access
+- Improved security warnings for export operations
+- Added dry-run mode for safe import preview
+- Comprehensive import/export tests
 
 ### v0.2.1
 - Added cryptographically secure password generation (`generate` command)
