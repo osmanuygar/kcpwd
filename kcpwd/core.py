@@ -173,8 +173,7 @@ def list_all_keys() -> List[str]:
 def export_passwords(filepath: str, include_passwords: bool = True) -> Dict:
     """Export all passwords to a JSON file
 
-    WARNING: The exported file contains passwords in PLAIN TEXT.
-    Keep this file secure and delete it after use.
+    WARNING: Exported file contains passwords in PLAIN TEXT. Keep secure!
 
     Args:
         filepath: Path to the output JSON file
@@ -205,7 +204,7 @@ def export_passwords(filepath: str, include_passwords: bool = True) -> Dict:
         export_data = {
             'exported_at': datetime.now().isoformat(),
             'service': SERVICE_NAME,
-            'version': '0.3.0',
+            'version': '0.4.0',
             'include_passwords': include_passwords,
             'passwords': []
         }
