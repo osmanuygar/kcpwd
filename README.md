@@ -5,9 +5,10 @@
 ## Features
 
 -  Secure storage using macOS Keychain
+-  **Master Password Protection (v0.4.0)** - Extra protection layer for sensitive passwords
 -  Automatic clipboard copying
 -  Cryptographically secure password generation
--  **Import/Export functionality for backups**
+-  Import/Export functionality for backups
 -  Simple CLI interface
 -  Python library for programmatic access
 -  Decorator support for automatic password injection
@@ -34,25 +35,47 @@ pip install -e .
 
 #### Store a password
 ```bash
+# Regular password
 kcpwd set dbadmin asd123
+
+# or shorthand:
+kcpwd set-master prod_db secret123
 ```
 
 #### Retrieve a password (copies to clipboard)
 ```bash
+# Regular password
 kcpwd get dbadmin
+
+# or shorthand:
+kcpwd get-master prod_db
 ```
 
 #### Delete a password
 ```bash
+# Regular password
 kcpwd delete dbadmin
+
+# Master-protected password
+kcpwd delete-master prod_db
 ```
 
 #### List all stored passwords
 ```bash
 kcpwd list
+
+# Shows:
+# Regular passwords (3):
+#   • dbadmin
+#   • api_key
+#   • test_db
+#
+# 🔒 Master-protected passwords (2):
+#   • prod_db 🔒
+#   • production_api 🔒
 ```
 
-**Note:** The `list` command uses `security dump-keychain` which may take a few seconds and requires access to your keychain. If it shows "No passwords stored" but you know you have passwords, try using Keychain Access app to verify.
+**Note:** The `list` command shows regular and master-protected passwords separately. Master-protected passwords require the master password to retrieve.
 
 #### Generate a secure password
 ```bash
@@ -68,6 +91,9 @@ kcpwd generate --no-symbols
 # Generate and save immediately
 kcpwd generate -s myapi
 
+# Generate and save with master password
+kcpwd generate -s prod_api --master-password
+
 # Generate a 6-digit PIN
 kcpwd generate -l 6 --no-uppercase --no-lowercase --no-symbols
 
@@ -75,9 +101,9 @@ kcpwd generate -l 6 --no-uppercase --no-lowercase --no-symbols
 kcpwd generate --exclude-ambiguous
 ```
 
-#### Export passwords (NEW!)
+#### Export passwords
 ```bash
-# Export all passwords to a JSON file
+# Export all regular passwords to a JSON file
 kcpwd export backup.json
 
 # Export only key names (without passwords)
@@ -87,9 +113,11 @@ kcpwd export keys.json --keys-only
 kcpwd export backup.json -f
 ```
 
-** Security Warning**: Exported files contain passwords in **PLAIN TEXT**. Keep them secure!
+**⚠️ Security Warning**: 
+- Exported files contain passwords in **PLAIN TEXT**. Keep them secure!
+- **Master-protected passwords are NOT included in exports** for security reasons.
 
-#### Import passwords (NEW!)
+#### Import passwords
 ```bash
 # Import passwords (skip existing keys)
 kcpwd import backup.json
@@ -122,6 +150,40 @@ password = get_password("my_database", copy_to_clip=True)
 delete_password("my_database")
 ```
 
+#### Master Password Protection (NEW in v0.4.0!)
+
+```python
+from kcpwd.master_protection import (
+    set_master_password,
+    get_master_password,
+    delete_master_password,
+    has_master_password,
+    list_master_keys
+)
+
+# Store password with master password protection
+set_master_password("prod_db", "super_secret", "MyMasterPass123!")
+
+# Retrieve master-protected password
+password = get_master_password("prod_db", "MyMasterPass123!")
+print(password)  # Output: super_secret
+
+# Wrong master password returns None
+password = get_master_password("prod_db", "WrongPassword")
+print(password)  # Output: None
+
+# Check if a key has master password protection
+if has_master_password("prod_db"):
+    print("This password is master-protected")
+
+# List all master-protected keys
+keys = list_master_keys()
+print(keys)  # Output: ['prod_db', 'prod_api']
+
+# Delete master-protected password
+delete_master_password("prod_db")
+```
+
 #### Password Generation
 
 ```python
@@ -145,28 +207,35 @@ pin = generate_password(
 print(pin)  # Output: '384729'
 ```
 
-#### List All Keys (NEW!)
+#### List All Keys
 
 ```python
 from kcpwd import list_all_keys
+from kcpwd.master_protection import list_master_keys
 
-# Get all stored password keys
+# Get all regular password keys
 keys = list_all_keys()
 print(keys)  # Output: ['my_database', 'api_key', 'email_password']
+
+# Get all master-protected keys
+master_keys = list_master_keys()
+print(master_keys)  # Output: ['prod_db', 'prod_api']
 
 # Check if a specific key exists
 if 'my_database' in list_all_keys():
     print("Database password exists!")
 ```
 
-#### Export/Import (NEW!)
+#### Export/Import
 
 ```python
 from kcpwd import export_passwords, import_passwords
 
-# Export all passwords
+# Export all regular passwords
 result = export_passwords('backup.json')
 print(f"Exported {result['exported_count']} passwords")
+
+# Note: Master-protected passwords are NOT included in exports
 
 # Export only keys (without passwords)
 result = export_passwords('keys_only.json', include_passwords=False)
@@ -184,7 +253,7 @@ result = import_passwords('backup.json', dry_run=True)
 print(result['message'])
 ```
 
-#### Using Decorators (Recommended!)
+#### Using Decorators
 
 The `@require_password` decorator automatically injects passwords from keychain:
 
@@ -207,135 +276,27 @@ result = connect_to_database("localhost", "admin")
 # Output: Connected with password: secret123
 ```
 
-#### Advanced Decorator Usage
+**Note**: Decorator currently works only with regular passwords, not master-protected ones.
 
-You can specify different parameter names:
 
-```python
-from kcpwd import require_password, set_password
+### Security Details
 
-# Store API key
-set_password("github_api", "ghp_xxxxxxxxxxxx")
+- **Encryption**: AES-256-GCM (authenticated encryption)
+- **Key Derivation**: PBKDF2-SHA256 with 600,000 iterations (OWASP 2023)
+- **Storage**: Separate keychain service (`kcpwd-master`)
+- **Master Password**: Not stored anywhere (must be remembered)
 
-# Inject into custom parameter name
-@require_password('github_api', param_name='api_key')
-def call_github_api(endpoint, api_key=None):
-    print(f"Calling GitHub API: {endpoint}")
-    print(f"Using key: {api_key}")
-    # Your API call code here
-    return {"status": "success"}
+### Important Notes
 
-# API key automatically retrieved from keychain
-response = call_github_api("/user/repos")
-```
+ **Master Password is NOT backed up by kcpwd**
+- If you forget your master password, master-protected passwords **CANNOT be recovered**
+- Store your master password in a safe place (paper backup, different password manager)
+- Each master-protected password is independently encrypted
 
-#### Real-World Examples
-
-**Database Connection:**
-```python
-#import psycopg2
-from kcpwd import require_password, set_password
-
-# Setup: Store password once
-set_password("prod_db", "my_secure_password")
-
-# Use in your code
-@require_password('prod_db')
-def get_db_connection(host, user, database, password=None):
-    return psycopg2.connect(
-        host=host,
-        user=user,
-        password=password,
-        database=database
-    )
-
-# No need to handle password manually!
-conn = get_db_connection(
-    host="prod.example.com",
-    user="dbuser",
-    database="myapp"
-)
-```
-
-**Backup Script:**
-```python
-from kcpwd import export_passwords, import_passwords
-import os
-from datetime import datetime
-
-def backup_passwords():
-    """Create a timestamped backup of all passwords"""
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    backup_file = f'passwords_backup_{timestamp}.json'
-    
-    result = export_passwords(backup_file)
-    
-    if result['success']:
-        print(f"✓ Backup created: {backup_file}")
-        print(f"  Exported {result['exported_count']} passwords")
-        
-        # Move to secure location
-        secure_dir = os.path.expanduser('~/Documents/Backups')
-        os.makedirs(secure_dir, exist_ok=True)
-        os.rename(backup_file, os.path.join(secure_dir, backup_file))
-    else:
-        print(f"✗ Backup failed: {result['message']}")
-
-def restore_passwords(backup_file):
-    """Restore passwords from a backup"""
-    # Preview first
-    result = import_passwords(backup_file, dry_run=True)
-    print(f"Preview: {result['message']}")
-    
-    # Confirm
-    if input("Continue with import? (y/n): ").lower() == 'y':
-        result = import_passwords(backup_file, overwrite=True)
-        print(f"✓ {result['message']}")
-    else:
-        print("Import cancelled")
-```
-
-**Migration Script:**
-```python
-from kcpwd import export_passwords, import_passwords, list_all_keys
-
-def migrate_to_new_machine(export_path='~/migration.json'):
-    """Export passwords for migration to a new machine"""
-    export_path = os.path.expanduser(export_path)
-    
-    result = export_passwords(export_path)
-    
-    if result['success']:
-        print(f"✓ Exported {result['exported_count']} passwords")
-        print(f"  File: {export_path}")
-        print("\nOn your new machine, run:")
-        print(f"  kcpwd import {export_path}")
-    else:
-        print(f"✗ Export failed: {result['message']}")
-
-def complete_migration(import_path='~/migration.json'):
-    """Complete migration on new machine"""
-    import_path = os.path.expanduser(import_path)
-    
-    # Check existing passwords
-    existing = list_all_keys()
-    if existing:
-        print(f"Found {len(existing)} existing passwords")
-        print("Use --overwrite to replace them")
-    
-    # Import
-    result = import_passwords(import_path)
-    
-    if result['success']:
-        print(f"✓ {result['message']}")
-        
-        # Clean up migration file
-        if input("Delete migration file? (y/n): ").lower() == 'y':
-            os.remove(import_path)
-            print("✓ Migration file deleted")
-    else:
-        print(f"✗ Import failed: {result['message']}")
-```
+ **Master-protected passwords are NOT exported**
+- This is intentional for security
+- Export only includes regular passwords
+- Use separate backup strategy for production credentials
 
 ## Export File Format
 
@@ -345,7 +306,7 @@ The export JSON file has the following structure:
 {
   "exported_at": "2025-01-15T10:30:00.123456",
   "service": "kcpwd",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "include_passwords": true,
   "passwords": [
     {
@@ -360,6 +321,8 @@ The export JSON file has the following structure:
 }
 ```
 
+**Note**: Master-protected passwords are not included in exports.
+
 ## How It Works
 
 `kcpwd` stores your passwords in the **macOS Keychain** - the same secure, encrypted storage that Safari and other macOS apps use. This means:
@@ -369,91 +332,105 @@ The export JSON file has the following structure:
 -  They're protected by your Mac's login password
 -  No plain text files or databases
 -  Can be accessed programmatically via Python
+-  **Master-protected passwords have an additional AES-256 encryption layer** (v0.4.0)
 
 ### Viewing Your Passwords
 
-Open **Keychain Access** app and search for "kcpwd" to see all stored passwords.
+Open **Keychain Access** app and search for "kcpwd" to see regular passwords.
+Search for "kcpwd-master" to see master-protected entries (encrypted data).
 
 Or use Terminal:
 ```bash
+# Regular password
 security find-generic-password -s "kcpwd" -a "dbadmin" -w
+
+# Master-protected (shows encrypted data)
+security find-generic-password -s "kcpwd-master" -a "prod_db" -w
 ```
 
 ## API Reference
 
-### Functions
+### Regular Password Functions
 
 #### `set_password(key: str, password: str) -> bool`
 Store a password in macOS Keychain.
-- Returns `True` if successful, `False` otherwise
 
 #### `get_password(key: str, copy_to_clip: bool = False) -> Optional[str]`
 Retrieve a password from macOS Keychain.
-- `copy_to_clip`: If `True`, also copies password to clipboard
-- Returns password string if found, `None` otherwise
 
 #### `delete_password(key: str) -> bool`
 Delete a password from macOS Keychain.
-- Returns `True` if successful, `False` otherwise
 
 #### `list_all_keys() -> List[str]`
-List all stored password keys from macOS Keychain.
-- Returns list of key names
+List all regular password keys.
 
-#### `export_passwords(filepath: str, include_passwords: bool = True) -> Dict`
-Export all passwords to a JSON file.
-- `filepath`: Path to output JSON file
-- `include_passwords`: If `True`, include passwords; if `False`, only keys
-- Returns dict with `success`, `exported_count`, `failed_keys`, `message`
+### Master Password Functions (NEW in v0.4.0)
 
-#### `import_passwords(filepath: str, overwrite: bool = False, dry_run: bool = False) -> Dict`
-Import passwords from a JSON file.
-- `filepath`: Path to JSON file to import
-- `overwrite`: If `True`, overwrite existing passwords
-- `dry_run`: If `True`, preview without importing
-- Returns dict with `success`, `imported_count`, `skipped_keys`, `failed_keys`, `message`
+#### `set_master_password(key: str, password: str, master_password: str) -> bool`
+Store password with master password protection.
+- `key`: Password identifier
+- `password`: The actual password to store
+- `master_password`: Master password to encrypt with
+
+#### `get_master_password(key: str, master_password: str) -> Optional[str]`
+Retrieve master-protected password.
+- Returns `None` if key not found or wrong master password
+
+#### `delete_master_password(key: str) -> bool`
+Delete master-protected password.
+
+#### `has_master_password(key: str) -> bool`
+Check if key is master-protected.
+
+#### `list_master_keys() -> List[str]`
+List all master-protected keys.
+
+### Other Functions
 
 #### `copy_to_clipboard(text: str) -> bool`
 Copy text to macOS clipboard.
-- Returns `True` if successful, `False` otherwise
 
 #### `generate_password(length=16, use_uppercase=True, use_lowercase=True, use_digits=True, use_symbols=True, exclude_ambiguous=False) -> str`
 Generate a cryptographically secure random password.
-- `length`: Password length (minimum 4)
-- `use_uppercase`: Include uppercase letters
-- `use_lowercase`: Include lowercase letters  
-- `use_digits`: Include digits
-- `use_symbols`: Include symbols (!@#$%^&*...)
-- `exclude_ambiguous`: Exclude ambiguous characters (0/O, 1/l/I)
-- Returns generated password string
 
+#### `export_passwords(filepath: str, include_passwords: bool = True) -> Dict`
+Export regular passwords to JSON file.
+**Note**: Does not include master-protected passwords.
+
+#### `import_passwords(filepath: str, overwrite: bool = False, dry_run: bool = False) -> Dict`
+Import passwords from JSON file.
 
 ### Decorators
 
 #### `@require_password(key: str, param_name: str = 'password')`
-Decorator that automatically injects password from keychain into function parameter.
-- `key`: Keychain key to retrieve password from
-- `param_name`: Parameter name to inject password into (default: `'password'`)
-- Raises `ValueError` if password not found in keychain
+Decorator that automatically injects password from keychain.
 
 ## Security Notes
 
 **Important Security Considerations:**
 
--  Passwords are stored in macOS Keychain (encrypted)
--  **Export files contain passwords in PLAIN TEXT** - keep them secure!
+### Master Password Protection (v0.4.0)
+-  Master password adds AES-256-GCM encryption layer
+-  Uses PBKDF2-SHA256 with 600,000 iterations (OWASP 2023)
+-  **Master password is NOT backed up** - keep it safe!
+-  Each password independently encrypted with unique salt/nonce
+-  Master-protected passwords excluded from exports
+
+### General Security
+-  Regular passwords stored in macOS Keychain (encrypted by macOS)
+-  Export files contain regular passwords in **PLAIN TEXT** - keep secure!
 -  Passwords remain in clipboard until you copy something else
 -  Consider clearing clipboard after use for sensitive passwords
 -  Designed for personal use on trusted devices
 -  Always use strong, unique passwords
--  Decorator usage means password is in memory during function execution
--  Delete export files after use or store them encrypted
+-  Delete export files immediately after use
 -  Never commit export files to version control
 
 ## Requirements
 
 - **macOS only** (uses native Keychain)
 - Python 3.8+ 
+- cryptography>=41.0.0 (for master password protection)
 
 ## Development
 
@@ -469,6 +446,8 @@ pip install -e .
 ### Run tests
 ```bash
 pytest
+pytest -v  # verbose
+pytest test/test_master.py  # master password tests only
 ```
 
 ## Troubleshooting
@@ -486,20 +465,27 @@ The `list` command uses `security dump-keychain` which:
 3. Use Keychain Access app: Open Keychain Access → Search for "kcpwd"
 4. Check with terminal: `security find-generic-password -s kcpwd`
 
-If you can get passwords with `kcpwd get` but `list` doesn't work, your passwords are safe and accessible - the list feature just has trouble parsing `security dump-keychain` output on some macOS versions.
+### Master Password Issues (v0.4.0)
 
-### Export fails or returns empty
+**"No password found or incorrect master password"**
+- Check you're using the correct master password
+- Master password is case-sensitive
+- If forgotten, password cannot be recovered
 
-If `kcpwd export` shows 0 passwords exported but you have passwords:
-1. Unlock your keychain
-2. The export depends on `list_all_keys()` - use the workarounds above
-3. Alternatively, manually export keys you know: Store them in a text file and import later
+**"Passwords do not match" when setting**
+- Retype carefully
+- Make sure both prompts get same password
 
-### Import issues
+### Export/Import issues
 
-- **"Cannot import: file contains only keys"**: The export file was created with `--keys-only` flag. Re-export with passwords.
-- **"Invalid JSON"**: Check file format, make sure it's valid JSON
-- **Skipped existing**: This is normal with default behavior. Use `--overwrite` to replace existing passwords
+**Export shows fewer passwords than expected**
+- Master-protected passwords are NOT included in exports (by design)
+- Use `kcpwd list` to see all passwords
+
+**Import fails**
+- Check JSON file format is valid
+- Ensure file has `passwords` array
+- Master-protected passwords cannot be imported
 
 ## License
 
@@ -511,7 +497,7 @@ Contributions welcome! Please feel free to submit a Pull Request.
 
 ## Disclaimer
 
-This is a personal password manager tool. While it uses secure storage (macOS Keychain), please use at your own risk. For enterprise or critical password management, consider established solutions like 1Password, Bitwarden, or similar.
+This is a personal password manager tool. While it uses secure storage (macOS Keychain) and strong encryption for master-protected passwords (AES-256-GCM), please use at your own risk. For enterprise or critical password management, consider established solutions like 1Password, Bitwarden, or similar.
 
 ## Roadmap
 
@@ -519,17 +505,27 @@ This is a personal password manager tool. While it uses secure storage (macOS Ke
 - [x] Decorator for automatic password injection
 - [x] Password generation
 - [x] Import/export functionality
-- [ ] Master password protection
+- [x] Master password protection (v0.4.0) 
 - [ ] Password strength indicator
+- [ ] Decorator support for master-protected passwords
 - [ ] Cross-platform support (Linux, Windows)
 - [ ] GUI web UI application
-- [ ] Multi Node/user support
+- [ ] Multi user support
 - [ ] Integration with other password managers
 - [ ] Two-factor authentication support
-- [ ] MultiSite password management
-- [ ] Encrypted export files
 
 ## Changelog
+
+### v0.4.0 (Current)
+- ** Added per-password master password protection**
+- Each password can optionally be protected with master password
+- AES-256-GCM authenticated encryption for master-protected passwords
+- PBKDF2-SHA256 key derivation with 600,000 iterations (OWASP 2023)
+- New commands: `set-master`, `get-master`, `delete-master` for easier usage
+- CLI flags: `--master-password` / `-m` for set/get/generate commands
+- Master-protected passwords shown separately in `list` command
+- Master-protected passwords excluded from exports (security feature)
+- New `kcpwd.master` module with dedicated functions
 
 ### v0.3.0
 - Added import/export functionality for password backups

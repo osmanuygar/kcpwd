@@ -6,6 +6,7 @@ Stores passwords securely in macOS Keychain and copies them to clipboard
 
 import click
 import os
+import getpass
 from .core import set_password as _set_password
 from .core import get_password as _get_password
 from .core import delete_password as _delete_password
@@ -14,6 +15,12 @@ from .core import list_all_keys as _list_all_keys
 from .core import export_passwords as _export_passwords
 from .core import import_passwords as _import_passwords
 from .core import SERVICE_NAME
+from .master_protection import (
+    set_master_password,
+    get_master_password,
+    delete_master_password,
+    list_master_keys
+)
 
 
 @click.group()
@@ -25,31 +32,122 @@ def cli():
 @cli.command()
 @click.argument('key')
 @click.argument('password')
-def set(key: str, password: str):
+@click.option('--master-password', '-m', is_flag=True,
+              help='Protect this password with a master password')
+def set(key: str, password: str, master_password: bool= False):
     """Store a password for a given key
 
-    Example: kcpwd set dbadmin asd123
+    Examples:
+        kcpwd set dbadmin asd123
+        kcpwd set prod_db secret --master-password
     """
-    if _set_password(key, password):
-        click.echo(f"✓ Password stored for '{key}'")
+    if master_password:
+        # Prompt for master password
+        mp = getpass.getpass("Enter master password: ")
+        mp_confirm = getpass.getpass("Confirm master password: ")
+
+        if mp != mp_confirm:
+            click.echo("Error: Passwords do not match", err=True)
+            return
+
+        if len(mp) < 8:
+            click.echo("Error: Master password must be at least 8 characters", err=True)
+            return
+
+        if set_master_password(key, password, mp):
+            click.echo(f"✓ Password stored for '{key}' with master password protection")
+        else:
+            click.echo(f"Error storing password", err=True)
+    else:
+        if _set_password(key, password):
+            click.echo(f"✓ Password stored for '{key}'")
+        else:
+            click.echo(f"Error storing password", err=True)
+
+
+@cli.command()
+@click.argument('key')
+@click.argument('password')
+def set_master(key: str, password: str):
+    """Store a password with master password protection (shorthand)
+
+    Example: kcpwd set-master prod_db secret123
+    """
+    # Prompt for master password
+    mp = getpass.getpass("Enter master password: ")
+    mp_confirm = getpass.getpass("Confirm master password: ")
+
+    if mp != mp_confirm:
+        click.echo("Error: Passwords do not match", err=True)
+        return
+
+    if len(mp) < 8:
+        click.echo("Error: Master password must be at least 8 characters", err=True)
+        return
+
+    if set_master_password(key, password, mp):
+        click.echo(f"✓ Password stored for '{key}' with master password protection")
     else:
         click.echo(f"Error storing password", err=True)
 
 
 @cli.command()
 @click.argument('key')
-def get(key: str):
+@click.option('--master-password', '-m', is_flag=True,
+              help='Password is protected with master password')
+def get(key: str, master_password: bool = False):
     """Retrieve password and copy to clipboard
 
-    Example: kcpwd get dbadmin
+    Examples:
+        kcpwd get dbadmin
+        kcpwd get prod_db --master-password
     """
-    password = _get_password(key, copy_to_clip=True)
+    if master_password:
+        # Prompt for master password
+        mp = getpass.getpass("Enter master password: ")
+
+        password = get_master_password(key, mp)
+
+        if password is None:
+            click.echo(f"No password found for '{key}' or incorrect master password", err=True)
+            return
+
+        from .core import copy_to_clipboard
+        if copy_to_clipboard(password):
+            click.echo(f"✓ Password for '{key}' copied to clipboard")
+        else:
+            click.echo(f"✓ Password: {password}")
+    else:
+        password = _get_password(key, copy_to_clip=True)
+
+        if password is None:
+            click.echo(f"No password found for '{key}'", err=True)
+            return
+
+        click.echo(f"✓ Password for '{key}' copied to clipboard")
+
+
+@cli.command()
+@click.argument('key')
+def get_master(key: str):
+    """Retrieve master-protected password (shorthand)
+
+    Example: kcpwd get-master prod_db
+    """
+    # Prompt for master password
+    mp = getpass.getpass("Enter master password: ")
+
+    password = get_master_password(key, mp)
 
     if password is None:
-        click.echo(f"No password found for '{key}'", err=True)
+        click.echo(f"No password found for '{key}' or incorrect master password", err=True)
         return
 
-    click.echo(f"✓ Password for '{key}' copied to clipboard")
+    from .core import copy_to_clipboard
+    if copy_to_clipboard(password):
+        click.echo(f"✓ Password for '{key}' copied to clipboard")
+    else:
+        click.echo(f"✓ Password: {password}")
 
 
 @cli.command()
@@ -67,24 +165,49 @@ def delete(key: str):
 
 
 @cli.command()
-def list():
-    """List all stored password keys (not the actual passwords)
+@click.argument('key')
+@click.confirmation_option(prompt=f'Are you sure you want to delete this master-protected password?')
+def delete_master(key: str):
+    """Delete a master-protected password (shorthand)
 
+    Example: kcpwd delete-master prod_db
+    """
+    if delete_master_password(key):
+        click.echo(f"✓ Master-protected password for '{key}' deleted")
+    else:
+        click.echo(f"No master-protected password found for '{key}'", err=True)
+
+
+@cli.command()
+def list():
+    """List all stored password keys
+
+    Shows regular passwords and master-protected passwords separately.
     Example: kcpwd list
     """
     keys = _list_all_keys()
+    master_keys = list_master_keys()
 
-    if not keys:
+    if not keys and not master_keys:
         click.echo("No passwords stored yet")
         click.echo(f"\nTo add a password: kcpwd set <key> <password>")
+        click.echo(f"To add with master password: kcpwd set <key> <password> --master-password")
         return
 
-    click.echo(f"Found {len(keys)} stored password(s):\n")
-    for key in keys:
-        click.echo(f"  • {key}")
+    if keys:
+        click.echo(f"Regular passwords ({len(keys)}):\n")
+        for key in keys:
+            click.echo(f"  • {key}")
+
+    if master_keys:
+        click.echo(f"\n🔒 Master-protected passwords ({len(master_keys)}):\n")
+        for key in master_keys:
+            click.echo(f"  • {key} 🔒")
 
     click.echo(f"\nTo retrieve: kcpwd get <key>")
+    click.echo(f"To retrieve master-protected: kcpwd get <key> --master-password")
     click.echo(f"To delete: kcpwd delete <key>")
+    click.echo(f"To delete master-protected: kcpwd delete-master <key>")
 
 
 @cli.command()
@@ -95,16 +218,17 @@ def list():
 @click.option('--no-symbols', is_flag=True, help='Exclude symbols')
 @click.option('--exclude-ambiguous', is_flag=True, help='Exclude ambiguous characters (0/O, 1/l/I)')
 @click.option('--save', '-s', help='Save generated password with this key')
+@click.option('--master-password', '-m', is_flag=True, help='Save with master password protection')
 @click.option('--copy/--no-copy', default=True, help='Copy to clipboard (default: yes)')
-def generate(length, no_uppercase, no_lowercase, no_digits, no_symbols, exclude_ambiguous, save, copy):
+def generate(length, no_uppercase, no_lowercase, no_digits, no_symbols, exclude_ambiguous,
+             save, master_password, copy):
     """Generate a secure random password
 
     Examples:
-        kcpwd generate                          # 16-char password
-        kcpwd generate -l 20                    # 20-char password
-        kcpwd generate --no-symbols             # No special characters
-        kcpwd generate -s myapi                 # Generate and save as 'myapi'
-        kcpwd generate -l 6 --no-uppercase --no-lowercase --no-symbols  # 6-digit PIN
+        kcpwd generate
+        kcpwd generate -l 20
+        kcpwd generate -s myapi
+        kcpwd generate -s prod_db --master-password
     """
     try:
         password = _generate_password(
@@ -127,10 +251,23 @@ def generate(length, no_uppercase, no_lowercase, no_digits, no_symbols, exclude_
 
         # Save if key provided
         if save:
-            if _set_password(save, password):
-                click.echo(f"✓ Saved as '{save}'")
+            if master_password:
+                mp = getpass.getpass("\nEnter master password: ")
+                mp_confirm = getpass.getpass("Confirm master password: ")
+
+                if mp != mp_confirm:
+                    click.echo("Error: Passwords do not match", err=True)
+                    return
+
+                if set_master_password(save, password, mp):
+                    click.echo(f"✓ Saved as '{save}' with master password protection")
+                else:
+                    click.echo(f"Failed to save password", err=True)
             else:
-                click.echo(f"Failed to save password", err=True)
+                if _set_password(save, password):
+                    click.echo(f"✓ Saved as '{save}'")
+                else:
+                    click.echo(f"Failed to save password", err=True)
 
         click.echo()
 
@@ -148,12 +285,11 @@ def export(filepath: str, keys_only: bool, force: bool):
     """Export all passwords to a JSON file
 
     WARNING: Exported file contains passwords in PLAIN TEXT!
-    Keep the file secure and delete it after use.
+    Master-protected passwords are NOT included in exports.
 
     Examples:
-        kcpwd export backup.json                # Export with passwords
-        kcpwd export keys.json --keys-only      # Export only key names
-        kcpwd export backup.json -f             # Force overwrite
+        kcpwd export backup.json
+        kcpwd export keys.json --keys-only
     """
     # Check if file exists
     if os.path.exists(filepath) and not force:
@@ -161,10 +297,11 @@ def export(filepath: str, keys_only: bool, force: bool):
             click.echo("Export cancelled")
             return
 
-    # Security warning for full export
+    # Security warning
     if not keys_only:
         click.echo(click.style("⚠️  WARNING: Exported file will contain passwords in PLAIN TEXT!",
                                fg='yellow', bold=True))
+        click.echo("Master-protected passwords are NOT included for security.")
         click.echo("Make sure to:")
         click.echo("  • Store the file in a secure location")
         click.echo("  • Delete it after use")
@@ -180,6 +317,15 @@ def export(filepath: str, keys_only: bool, force: bool):
     if result['success']:
         click.echo(f"✓ {result['message']}")
 
+        # Show master-protected keys if any
+        master_keys = list_master_keys()
+        if master_keys:
+            click.echo(f"\nℹ️  {len(master_keys)} master-protected passwords NOT exported:")
+            for key in master_keys[:5]:
+                click.echo(f"  • {key}")
+            if len(master_keys) > 5:
+                click.echo(f"  ... and {len(master_keys) - 5} more")
+
         if result['failed_keys']:
             click.echo(f"\n⚠️  Failed to export: {', '.join(result['failed_keys'])}", err=True)
     else:
@@ -194,9 +340,9 @@ def import_cmd(filepath: str, overwrite: bool, dry_run: bool):
     """Import passwords from a JSON file
 
     Examples:
-        kcpwd import backup.json                # Import, skip existing
-        kcpwd import backup.json --overwrite    # Import, overwrite existing
-        kcpwd import backup.json --dry-run      # Preview import
+        kcpwd import backup.json
+        kcpwd import backup.json --overwrite
+        kcpwd import backup.json --dry-run
     """
     # Perform import
     result = _import_passwords(filepath, overwrite=overwrite, dry_run=dry_run)
@@ -206,7 +352,7 @@ def import_cmd(filepath: str, overwrite: bool, dry_run: bool):
 
         if result['skipped_keys']:
             click.echo(f"\n📋 Skipped existing keys ({len(result['skipped_keys'])}):")
-            for key in result['skipped_keys'][:10]:  # Show first 10
+            for key in result['skipped_keys'][:10]:
                 click.echo(f"  • {key}")
             if len(result['skipped_keys']) > 10:
                 click.echo(f"  ... and {len(result['skipped_keys']) - 10} more")
