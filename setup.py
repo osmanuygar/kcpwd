@@ -5,10 +5,10 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="kcpwd",
-    version="0.4.0",
+    version="0.4.1",
     author="osmanuygar",
     author_email="osmanuygar@gmail.com",
-    description="macOS Keychain Password Manager - CLI tool and Python library with optional master password protection, import/export, decorator support, and password generation",
+    description="macOS Keychain Password Manager - CLI tool and Python library with master password protection, decorator support for master-protected passwords, import/export, and password generation",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/osmanuygar/kcpwd",
@@ -30,7 +30,7 @@ setup(
         "Programming Language :: Python :: 3.12",
         "Operating System :: MacOS",
     ],
-    keywords="password manager cli keychain macos security decorator library import export backup master-password encryption",
+    keywords="password manager cli keychain macos security decorator library import export backup master-password encryption automation",
     python_requires=">=3.8",
     install_requires=[
         "click>=8.0.0",
