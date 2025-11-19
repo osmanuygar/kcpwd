@@ -13,7 +13,7 @@ from .core import (
     export_passwords,
     import_passwords
 )
-from .decorators import require_password
+from .decorators import require_password, require_master_password
 from .master_protection import (
     set_master_password,
     get_master_password,
@@ -22,7 +22,7 @@ from .master_protection import (
     list_master_keys
 )
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 __all__ = [
     'set_password',
     'get_password',
@@ -33,6 +33,7 @@ __all__ = [
     'export_passwords',
     'import_passwords',
     'require_password',
+    'require_master_password',
     'set_master_password',
     'get_master_password',
     'delete_master_password',
