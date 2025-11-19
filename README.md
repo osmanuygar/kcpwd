@@ -6,6 +6,8 @@
 
 -  Secure storage using macOS Keychain
 -  **Master Password Protection (v0.4.0)** - Extra protection layer for sensitive passwords
+-  **Password Strength Checker (v0.4.1)** - Analyze password strength with detailed feedback
+-  **Master Password Decorator (v0.4.1)** - Auto-inject master-protected passwords with `@require_master_password`
 -  Automatic clipboard copying
 -  Cryptographically secure password generation
 -  Import/Export functionality for backups
@@ -101,6 +103,15 @@ kcpwd generate -l 6 --no-uppercase --no-lowercase --no-symbols
 kcpwd generate --exclude-ambiguous
 ```
 
+#### Check password strength
+```bash
+# Check any password
+kcpwd check-strength "MyP@ssw0rd123"
+
+# Check before saving
+kcpwd set myapi password123 --check-strength
+```
+
 #### Export passwords
 ```bash
 # Export all regular passwords to a JSON file
@@ -183,6 +194,51 @@ print(keys)  # Output: ['prod_db', 'prod_api']
 # Delete master-protected password
 delete_master_password("prod_db")
 ```
+
+#### Password Strength Checker (NEW in v0.4.1!)
+
+```python
+from kcpwd import check_password_strength
+
+# Check password strength
+result = check_password_strength("MyP@ssw0rd123")
+print(f"Score: {result['score']}/100")
+print(f"Strength: {result['strength_text']}")
+# Output:
+# Score: 75/100
+# Strength: STRONG
+
+# Get detailed feedback
+if result['score'] < 50:
+    for tip in result['feedback']:
+        print(f"  - {tip}")
+```
+
+#### Master Password Decorator (NEW in v0.4.1!)
+
+```python
+from kcpwd import require_master_password
+
+# Decorator automatically injects master-protected passwords
+@require_master_password('prod_db')
+def connect_to_database(host, username, password=None):
+    print(f"Connecting with password: {password}")
+    # Your database connection code here
+
+# Will prompt for master password
+connect_to_database("localhost", "admin")
+
+# For automation (no prompt)
+import os
+MASTER_PASSWORD = os.getenv('MASTER_PASSWORD')
+
+@require_master_password('prod_db', master_password=MASTER_PASSWORD)
+def automated_backup(password=None):
+    # Runs without user interaction
+    pass
+```
+
+**Note**: Decorator supports custom parameter names, prompt messages, and automation modes.
 
 #### Password Generation
 
@@ -276,7 +332,7 @@ result = connect_to_database("localhost", "admin")
 # Output: Connected with password: secret123
 ```
 
-**Note**: Decorator currently works only with regular passwords, not master-protected ones.
+**Note**: `@require_password` works with regular passwords. Use `@require_master_password` for master-protected passwords.
 
 
 ### Security Details
@@ -306,7 +362,7 @@ The export JSON file has the following structure:
 {
   "exported_at": "2025-01-15T10:30:00.123456",
   "service": "kcpwd",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "include_passwords": true,
   "passwords": [
     {
@@ -385,6 +441,49 @@ Check if key is master-protected.
 #### `list_master_keys() -> List[str]`
 List all master-protected keys.
 
+### Password Strength Function (NEW in v0.4.1)
+
+#### `check_password_strength(password: str) -> Dict`
+Analyze password strength with detailed feedback.
+
+Returns:
+```python
+{
+    'score': 85,              # 0-100
+    'strength': PasswordStrength.STRONG,
+    'strength_text': 'STRONG',
+    'feedback': ['Password looks good!'],
+    'details': {
+        'length': 13,
+        'has_lowercase': True,
+        'has_uppercase': True,
+        'has_digits': True,
+        'has_symbols': True
+    }
+}
+```
+
+### Decorators
+
+#### `@require_password(key: str, param_name: str = 'password')`
+Decorator that automatically injects password from keychain.
+
+#### `@require_master_password(key: str, param_name: str = 'password', master_password: Optional[str] = None, prompt_message: Optional[str] = None)` (NEW in v0.4.1)
+Decorator that automatically injects master-protected password.
+
+Parameters:
+- `key`: Password identifier
+- `param_name`: Parameter to inject into (default: 'password')
+- `master_password`: Pre-configured master password (for automation)
+- `prompt_message`: Custom prompt message
+
+Example:
+```python
+@require_master_password('prod_db')
+def connect(password=None):
+    pass
+```
+
 ### Other Functions
 
 #### `copy_to_clipboard(text: str) -> bool`
@@ -399,11 +498,6 @@ Export regular passwords to JSON file.
 
 #### `import_passwords(filepath: str, overwrite: bool = False, dry_run: bool = False) -> Dict`
 Import passwords from JSON file.
-
-### Decorators
-
-#### `@require_password(key: str, param_name: str = 'password')`
-Decorator that automatically injects password from keychain.
 
 ## Security Notes
 
@@ -448,6 +542,7 @@ pip install -e .
 pytest
 pytest -v  # verbose
 pytest test/test_master.py  # master password tests only
+pytest test/test_strength.py  # strength checker tests
 ```
 
 ## Troubleshooting
@@ -506,8 +601,9 @@ This is a personal password manager tool. While it uses secure storage (macOS Ke
 - [x] Password generation
 - [x] Import/export functionality
 - [x] Master password protection (v0.4.0) 
-- [ ] Password strength indicator
-- [ ] Decorator support for master-protected passwords
+- [x] Password strength indicator (v0.4.1)
+- [x] Master password decorator (v0.4.1)
+- [ ] Password history and rotation
 - [ ] Cross-platform support (Linux, Windows)
 - [ ] GUI web UI application
 - [ ] Multi user support
@@ -516,7 +612,16 @@ This is a personal password manager tool. While it uses secure storage (macOS Ke
 
 ## Changelog
 
-### v0.4.0 (Current)
+### v0.4.1 (Current)
+- ✨ **New**: `@require_master_password` decorator for automatic password injection
+- ✨ **New**: Password strength checker with visual feedback and detailed analysis
+- ✨ **New**: CLI command `check-strength` to analyze any password
+- ✨ **New**: `--check-strength` flag for `set` command
+- Enhanced: `generate` command now shows strength automatically
+- Added: 33 comprehensive tests (12 decorator + 21 strength)
+- Zero breaking changes - fully backward compatible
+
+### v0.4.0
 - ** Added per-password master password protection**
 - Each password can optionally be protected with master password
 - AES-256-GCM authenticated encryption for master-protected passwords

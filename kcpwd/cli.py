@@ -21,6 +21,7 @@ from .master_protection import (
     delete_master_password,
     list_master_keys
 )
+from .strength import check_password_strength, get_strength_color, get_strength_bar
 
 
 @click.group()
@@ -34,13 +35,38 @@ def cli():
 @click.argument('password')
 @click.option('--master-password', '-m', is_flag=True,
               help='Protect this password with a master password')
-def set(key: str, password: str, master_password: bool= False):
+@click.option('--check-strength', '-c', is_flag=True,
+              help='Check password strength before saving')
+def set(key: str, password: str, master_password: bool = False, check_strength: bool = False):
     """Store a password for a given key
 
     Examples:
         kcpwd set dbadmin asd123
         kcpwd set prod_db secret --master-password
+        kcpwd set myapi password123 --check-strength
     """
+    # Check strength if requested
+    if check_strength:
+        result = check_password_strength(password)
+        color = get_strength_color(result['strength'])
+        bar = get_strength_bar(result['score'])
+
+        click.echo(f"\n🔐 Password Strength Analysis:")
+        click.echo(f"Score: {result['score']}/100 [{bar}]")
+        click.echo(f"Strength: {click.style(result['strength_text'], fg=color, bold=True)}")
+
+        if result['feedback']:
+            click.echo(f"\n💡 Suggestions:")
+            for tip in result['feedback']:
+                click.echo(f"  • {tip}")
+
+        if result['score'] < 50:
+            click.echo(f"\n⚠️  Warning: This password is weak!")
+            if not click.confirm('Do you still want to save it?'):
+                click.echo("Cancelled")
+                return
+        click.echo()
+
     if master_password:
         # Prompt for master password
         mp = getpass.getpass("Enter master password: ")
@@ -220,8 +246,9 @@ def list():
 @click.option('--save', '-s', help='Save generated password with this key')
 @click.option('--master-password', '-m', is_flag=True, help='Save with master password protection')
 @click.option('--copy/--no-copy', default=True, help='Copy to clipboard (default: yes)')
+@click.option('--show-strength', is_flag=True, default=True, help='Show password strength (default: yes)')
 def generate(length, no_uppercase, no_lowercase, no_digits, no_symbols, exclude_ambiguous,
-             save, master_password, copy):
+             save, master_password, copy, show_strength):
     """Generate a secure random password
 
     Examples:
@@ -243,11 +270,21 @@ def generate(length, no_uppercase, no_lowercase, no_digits, no_symbols, exclude_
         # Display password
         click.echo(f"\n🔐 Generated password: {click.style(password, fg='green', bold=True)}")
 
+        # Show strength analysis
+        if show_strength:
+            result = check_password_strength(password)
+            color = get_strength_color(result['strength'])
+            bar = get_strength_bar(result['score'])
+
+            click.echo(f"\n📊 Strength: {click.style(result['strength_text'], fg=color, bold=True)} "
+                       f"({result['score']}/100)")
+            click.echo(f"    [{bar}]")
+
         # Copy to clipboard if requested
         if copy:
             from .core import copy_to_clipboard
             if copy_to_clipboard(password):
-                click.echo("✓ Copied to clipboard")
+                click.echo("\n✓ Copied to clipboard")
 
         # Save if key provided
         if save:
@@ -275,6 +312,38 @@ def generate(length, no_uppercase, no_lowercase, no_digits, no_symbols, exclude_
         click.echo(f"Error: {e}", err=True)
     except Exception as e:
         click.echo(f"Error generating password: {e}", err=True)
+
+
+@cli.command()
+@click.argument('password')
+def check_strength(password: str):
+    """Check strength of a password
+
+    Example: kcpwd check-strength "MyP@ssw0rd123"
+    """
+    result = check_password_strength(password)
+    color = get_strength_color(result['strength'])
+    bar = get_strength_bar(result['score'])
+
+    click.echo(f"\n🔐 Password Strength Analysis")
+    click.echo("=" * 40)
+    click.echo(f"\nScore: {result['score']}/100")
+    click.echo(f"[{bar}]")
+    click.echo(f"\nStrength: {click.style(result['strength_text'], fg=color, bold=True)}")
+
+    click.echo(f"\n📋 Details:")
+    click.echo(f"  Length: {result['details']['length']} characters")
+    click.echo(f"  Lowercase: {'✓' if result['details']['has_lowercase'] else '✗'}")
+    click.echo(f"  Uppercase: {'✓' if result['details']['has_uppercase'] else '✗'}")
+    click.echo(f"  Digits: {'✓' if result['details']['has_digits'] else '✗'}")
+    click.echo(f"  Symbols: {'✓' if result['details']['has_symbols'] else '✗'}")
+
+    if result['feedback']:
+        click.echo(f"\n💡 Suggestions:")
+        for tip in result['feedback']:
+            click.echo(f"  • {tip}")
+
+    click.echo()
 
 
 @cli.command()
