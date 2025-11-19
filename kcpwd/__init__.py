@@ -21,6 +21,7 @@ from .master_protection import (
     has_master_password,
     list_master_keys
 )
+from .strength import check_password_strength, PasswordStrength
 
 __version__ = "0.4.1"
 __all__ = [
@@ -38,5 +39,7 @@ __all__ = [
     'get_master_password',
     'delete_master_password',
     'has_master_password',
-    'list_master_keys'
+    'list_master_keys',
+    'check_password_strength',
+    'PasswordStrength'
 ]
