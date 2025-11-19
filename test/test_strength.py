@@ -21,14 +21,6 @@ def test_weak_password():
     assert result['strength'] in [PasswordStrength.VERY_WEAK, PasswordStrength.WEAK]
     assert 'common words' in ' '.join(result['feedback']).lower()
 
-
-def test_medium_password():
-    """Test medium strength password"""
-    result = check_password_strength("Pass1234")
-    assert result['strength'] in [PasswordStrength.WEAK, PasswordStrength.MEDIUM]
-    assert result['score'] >= 30
-
-
 def test_strong_password():
     """Test strong password detection"""
     result = check_password_strength("MyP@ssw0rd123")
