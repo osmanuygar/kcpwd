@@ -1,12 +1,13 @@
 """
-kcpwd.master - Master password protection for individual passwords
+kcpwd.master_protection - Master password protection for individual passwords
 Each password can optionally be protected with an additional master password layer
+Supports macOS and Linux
 """
 
 import keyring
 import hashlib
 import base64
-from typing import Optional
+from typing import Optional, List
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
@@ -173,7 +174,7 @@ def delete_master_password(key: str) -> bool:
         return False
 
 
-def list_master_keys() -> list:
+def list_master_keys() -> List[str]:
     """List all keys protected with master password
 
     Returns:
@@ -184,6 +185,20 @@ def list_master_keys() -> list:
         >>> print(keys)
         ['prod_db', 'api_key']
     """
+    from .platform_utils import get_platform
+
+    current_platform = get_platform()
+
+    if current_platform == 'macos':
+        return _list_master_keys_macos()
+    elif current_platform == 'linux':
+        return _list_master_keys_linux()
+    else:
+        return []
+
+
+def _list_master_keys_macos() -> List[str]:
+    """List master keys on macOS"""
     import subprocess
     import re
 
@@ -211,5 +226,30 @@ def list_master_keys() -> list:
                         keys.append(key)
 
         return sorted(keys)
+    except Exception:
+        return []
+
+
+def _list_master_keys_linux() -> List[str]:
+    """List master keys on Linux"""
+    try:
+        import secretstorage
+
+        connection = secretstorage.dbus_init()
+        collection = secretstorage.get_default_collection(connection)
+
+        keys = []
+        for item in collection.get_all_items():
+            attributes = item.get_attributes()
+            if attributes.get('service') == MASTER_SERVICE_NAME:
+                key = attributes.get('username')
+                if key and key not in keys:
+                    keys.append(key)
+
+        connection.close()
+        return sorted(keys)
+
+    except ImportError:
+        return []
     except Exception:
         return []

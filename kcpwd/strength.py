@@ -24,14 +24,6 @@ def check_password_strength(password: str) -> Dict[str, any]:
 
     Returns:
         dict: Contains 'score', 'strength', 'feedback', 'details'
-
-    Example:
-        >>> from kcpwd import check_password_strength
-        >>> result = check_password_strength("MyP@ssw0rd123")
-        >>> print(result['strength'])
-        'STRONG'
-        >>> print(result['score'])
-        85
     """
     if not password:
         return {
@@ -87,7 +79,7 @@ def check_password_strength(password: str) -> Dict[str, any]:
         score += 20
 
     # Penalize common patterns
-    if re.search(r'(.)\1{2,}', password):  # Repeated characters
+    if re.search(r'(.)\1{2,}', password):
         score -= 10
         feedback.append('Avoid repeated characters (aaa, 111, etc.)')
 
@@ -131,14 +123,7 @@ def check_password_strength(password: str) -> Dict[str, any]:
 
 
 def get_strength_color(strength: PasswordStrength) -> str:
-    """Get color for CLI display based on strength
-
-    Args:
-        strength: PasswordStrength enum value
-
-    Returns:
-        str: Color name for click.style()
-    """
+    """Get color for CLI display based on strength"""
     color_map = {
         PasswordStrength.VERY_WEAK: 'red',
         PasswordStrength.WEAK: 'red',
@@ -150,15 +135,7 @@ def get_strength_color(strength: PasswordStrength) -> str:
 
 
 def get_strength_bar(score: int, width: int = 20) -> str:
-    """Generate a visual strength bar
-
-    Args:
-        score: Password score (0-100)
-        width: Width of the bar in characters
-
-    Returns:
-        str: Visual bar representation
-    """
+    """Generate a visual strength bar"""
     filled = int((score / 100) * width)
     empty = width - filled
     return '█' * filled + '░' * empty

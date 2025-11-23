@@ -1,6 +1,7 @@
 """
 kcpwd.core - Core password management functions
 Can be used directly as a library
+Supports macOS and Linux with automatic backend selection
 """
 
 import keyring
@@ -10,33 +11,111 @@ import string
 import json
 from typing import Optional, Dict, List
 from datetime import datetime
+from .platform_utils import copy_to_clipboard as _platform_copy_to_clipboard
 
 SERVICE_NAME = "kcpwd"
 
+# Backend detection
+_backend_type: Optional[str] = None  # 'keyring' or 'file'
+_backend_error: Optional[str] = None
+
+
+def _detect_backend() -> str:
+    """Detect available backend
+
+    Returns:
+        str: 'keyring' if system keyring available, 'file' for encrypted file fallback
+    """
+    global _backend_type, _backend_error
+
+    if _backend_type is not None:
+        return _backend_type
+
+    # Try system keyring first
+    try:
+        # Get backend
+        backend = keyring.get_keyring()
+        backend_class = backend.__class__.__name__
+        backend_module = backend.__class__.__module__
+
+        # Check if it's a fail backend
+        if 'fail' in backend_module.lower():
+            raise Exception("Fail backend detected")
+
+        # Actually test if backend works
+        test_key = "_kcpwd_backend_test_"
+        keyring.set_password("_kcpwd_test_", test_key, "test")
+        result = keyring.get_password("_kcpwd_test_", test_key)
+
+        if result == "test":
+            # Clean up test
+            try:
+                keyring.delete_password("_kcpwd_test_", test_key)
+            except:
+                pass
+
+            _backend_type = 'keyring'
+            return 'keyring'
+        else:
+            raise Exception("Backend test failed")
+
+    except Exception as e:
+        _backend_error = str(e)
+        _backend_type = 'file'
+        return 'file'
+
+
+def get_backend_info() -> Dict:
+    """Get information about current backend
+
+    Returns:
+        dict: Backend type, name, and status
+    """
+    backend_type = _detect_backend()
+
+    info = {
+        'type': backend_type,
+        'available': True
+    }
+
+    if backend_type == 'keyring':
+        try:
+            backend = keyring.get_keyring()
+            info['name'] = backend.__class__.__name__
+            info['description'] = 'System keyring (OS-native secure storage)'
+        except:
+            info['name'] = 'Unknown'
+            info['description'] = 'System keyring'
+    else:
+        info['name'] = 'EncryptedFileBackend'
+        info['description'] = 'Encrypted file storage (fallback)'
+        info['note'] = 'Using file backend because no system keyring detected'
+        if _backend_error:
+            info['reason'] = _backend_error
+
+    return info
+
 
 def copy_to_clipboard(text: str) -> bool:
-    """Copy text to macOS clipboard using pbcopy
+    """Copy text to clipboard (platform-independent)
 
     Args:
         text: Text to copy to clipboard
 
     Returns:
         bool: True if successful, False otherwise
+
+    Note:
+        On Linux, clipboard functionality is disabled by default.
+        Use shell pipes instead: kcpwd get key | xclip -selection clipboard
     """
-    try:
-        process = subprocess.Popen(
-            ['pbcopy'],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE
-        )
-        process.communicate(text.encode('utf-8'))
-        return True
-    except Exception:
-        return False
+    return _platform_copy_to_clipboard(text)
 
 
 def set_password(key: str, password: str) -> bool:
-    """Store a password for a given key in macOS Keychain
+    """Store a password for a given key
+
+    Uses system keyring if available, otherwise encrypted file storage.
 
     Args:
         key: Identifier for the password
@@ -50,15 +129,24 @@ def set_password(key: str, password: str) -> bool:
         >>> set_password("my_db", "secret123")
         True
     """
+    backend_type = _detect_backend()
+
     try:
-        keyring.set_password(SERVICE_NAME, key, password)
-        return True
+        if backend_type == 'keyring':
+            keyring.set_password(SERVICE_NAME, key, password)
+            return True
+        else:
+            # Use file backend
+            from .file_backend import get_file_backend
+            return get_file_backend().set_password(SERVICE_NAME, key, password)
     except Exception:
         return False
 
 
 def get_password(key: str, copy_to_clip: bool = False) -> Optional[str]:
-    """Retrieve a password from macOS Keychain
+    """Retrieve a password
+
+    Uses system keyring if available, otherwise encrypted file storage.
 
     Args:
         key: Identifier for the password
@@ -74,10 +162,17 @@ def get_password(key: str, copy_to_clip: bool = False) -> Optional[str]:
         'secret123'
 
         >>> password = get_password("my_db", copy_to_clip=True)
-        # Password is now in clipboard
+        # Password is now in clipboard (if tool available)
     """
+    backend_type = _detect_backend()
+
     try:
-        password = keyring.get_password(SERVICE_NAME, key)
+        if backend_type == 'keyring':
+            password = keyring.get_password(SERVICE_NAME, key)
+        else:
+            # Use file backend
+            from .file_backend import get_file_backend
+            password = get_file_backend().get_password(SERVICE_NAME, key)
 
         if password and copy_to_clip:
             clipboard_success = copy_to_clipboard(password)
@@ -91,7 +186,9 @@ def get_password(key: str, copy_to_clip: bool = False) -> Optional[str]:
 
 
 def delete_password(key: str) -> bool:
-    """Delete a password from macOS Keychain
+    """Delete a password
+
+    Uses system keyring if available, otherwise encrypted file storage.
 
     Args:
         key: Identifier for the password to delete
@@ -104,23 +201,34 @@ def delete_password(key: str) -> bool:
         >>> delete_password("my_db")
         True
     """
+    backend_type = _detect_backend()
+
     try:
-        password = keyring.get_password(SERVICE_NAME, key)
+        if backend_type == 'keyring':
+            password = keyring.get_password(SERVICE_NAME, key)
 
-        if password is None:
-            return False
+            if password is None:
+                return False
 
-        keyring.delete_password(SERVICE_NAME, key)
-        return True
+            keyring.delete_password(SERVICE_NAME, key)
+            return True
+        else:
+            # Use file backend
+            from .file_backend import get_file_backend
+            return get_file_backend().delete_password(SERVICE_NAME, key)
     except Exception:
         return False
 
 
 def list_all_keys() -> List[str]:
-    """List all stored password keys from macOS Keychain
+    """List all stored password keys
 
-    Note: This uses the security command-line tool to query Keychain.
-    Returns empty list if unable to retrieve keys.
+    Uses system keyring if available, otherwise encrypted file storage.
+
+    Note: Implementation varies by platform.
+    - macOS: Uses security command-line tool
+    - Linux: Uses D-Bus Secret Service API
+    - File backend: Lists from encrypted storage
 
     Returns:
         List[str]: List of all stored keys
@@ -131,10 +239,34 @@ def list_all_keys() -> List[str]:
         >>> print(keys)
         ['my_db', 'api_key', 'email_password']
     """
+    backend_type = _detect_backend()
+
+    if backend_type == 'file':
+        # Use file backend
+        try:
+            from .file_backend import get_file_backend
+            return get_file_backend().list_keys(SERVICE_NAME)
+        except Exception:
+            return []
+
+    # Use system keyring
+    from .platform_utils import get_platform
+
+    current_platform = get_platform()
+
+    if current_platform == 'macos':
+        return _list_all_keys_macos()
+    elif current_platform == 'linux':
+        return _list_all_keys_linux()
+    else:
+        return []
+
+
+def _list_all_keys_macos() -> List[str]:
+    """List all keys on macOS using security command"""
     import re
 
     try:
-        # Use security dump-keychain to get all keychain entries
         result = subprocess.run(
             ['security', 'dump-keychain'],
             capture_output=True,
@@ -147,15 +279,10 @@ def list_all_keys() -> List[str]:
 
         keys = []
         output = result.stdout
-
-        # Split into keychain entries (each entry starts with 'keychain:')
         entries = output.split('keychain:')
 
         for entry in entries:
-            # Check if this entry is for kcpwd service
             if f'"{SERVICE_NAME}"' in entry or f'svce.*{SERVICE_NAME}' in entry:
-                # Extract account name using regex
-                # Look for patterns like: "acct"<blob>="keyname"
                 acct_match = re.search(r'"acct"<blob>="([^"]+)"', entry)
                 if acct_match:
                     key = acct_match.group(1)
@@ -165,6 +292,32 @@ def list_all_keys() -> List[str]:
         return sorted(keys)
 
     except subprocess.TimeoutExpired:
+        return []
+    except Exception:
+        return []
+
+
+def _list_all_keys_linux() -> List[str]:
+    """List all keys on Linux using secretstorage"""
+    try:
+        import secretstorage
+
+        connection = secretstorage.dbus_init()
+        collection = secretstorage.get_default_collection(connection)
+
+        keys = []
+        for item in collection.get_all_items():
+            attributes = item.get_attributes()
+            if attributes.get('service') == SERVICE_NAME:
+                key = attributes.get('username')
+                if key and key not in keys:
+                    keys.append(key)
+
+        connection.close()
+        return sorted(keys)
+
+    except ImportError:
+        # secretstorage not installed
         return []
     except Exception:
         return []
@@ -204,7 +357,7 @@ def export_passwords(filepath: str, include_passwords: bool = True) -> Dict:
         export_data = {
             'exported_at': datetime.now().isoformat(),
             'service': SERVICE_NAME,
-            'version': '0.4.0',
+            'version': '0.5.0',
             'include_passwords': include_passwords,
             'passwords': []
         }
