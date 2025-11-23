@@ -1,21 +1,38 @@
 # kcpwd
 
-**Keychain Password Manager CLI & Library** - A simple, secure password manager for macOS that uses the native macOS Keychain. Can be used as both a command-line tool and a Python library.
+**Cross-platform Keychain Password Manager CLI & Library** - A simple, secure password manager for **macOS and Linux** that uses native system keyrings. Can be used as both a command-line tool and a Python library.
 
 ## Features
 
--  Secure storage using macOS Keychain
+-  **Cross-platform**: Supports macOS and Linux
+-  **Automatic Backend Selection**: System keyring or encrypted file fallback
+-  **Works Everywhere**: Docker, CI/CD, headless servers - no dependencies!
+-  Secure storage using native system keyring (macOS Keychain / Linux Secret Service)
 -  **Master Password Protection (v0.4.0)** - Extra protection layer for sensitive passwords
--  **Password Strength Checker (v0.4.1)** - Analyze password strength with detailed feedback
--  **Master Password Decorator (v0.4.1)** - Auto-inject master-protected passwords with `@require_master_password`
--  Automatic clipboard copying
+-  Automatic clipboard copying (macOS) / optional on Linux
 -  Cryptographically secure password generation
+-  **Password Strength Checker (v0.4.1)** - Analyze password strength with detailed feedback
 -  Import/Export functionality for backups
 -  Simple CLI interface
 -  Python library for programmatic access
--  Decorator support for automatic password injection
+-  **Decorator support** for automatic password injection (including master-protected passwords)
 -  No passwords stored in plain text
--  Native macOS integration
+-  Native OS integration when available
+
+## Platform Support
+
+### macOS
+- ✅ Native macOS Keychain integration
+- ✅ Automatic clipboard copying with `pbcopy`
+- ✅ Full feature support
+
+### Linux
+- ✅ **Works immediately - no setup required!**
+- ✅ Auto-detects system keyring (gnome-keyring, KWallet, etc.)
+- ✅ Falls back to encrypted file storage if no keyring
+- ✅ Optional clipboard support via `xclip`, `xsel`, or `wl-copy` (auto-detected)
+- ✅ Perfect for Docker, CI/CD, headless servers
+- 📦 Zero required dependencies (secretstorage optional for system keyring)
 
 ## Installation
 
@@ -31,7 +48,101 @@ cd kcpwd
 pip install -e .
 ```
 
+### Linux Requirements (Optional)
+
+**kcpwd works out of the box on Linux!** For enhanced security with system keyring:
+
+**Ubuntu/Debian:**
+```bash
+# Optional: System keyring (more secure)
+sudo apt install gnome-keyring
+
+# Optional: Clipboard support
+sudo apt install xclip  # or xsel or wl-clipboard
+```
+
+**Fedora:**
+```bash
+# Optional: System keyring
+sudo dnf install gnome-keyring
+
+# Optional: Clipboard support
+sudo dnf install xclip  # or xsel
+```
+
+**Arch:**
+```bash
+# Optional: System keyring
+sudo pacman -S gnome-keyring
+
+# Optional: Clipboard support
+sudo pacman -S xclip  # or xsel
+```
+
+**Wayland users:**
+```bash
+# Use wl-clipboard for clipboard support
+sudo apt install wl-clipboard  # Debian/Ubuntu
+sudo dnf install wl-clipboard  # Fedora
+sudo pacman -S wl-clipboard   # Arch
+```
+
+**What if I don't install anything?**
+- ✅ kcpwd uses encrypted file backend (works everywhere!)
+- ✅ AES-256-GCM encryption (secure)
+- ✅ Perfect for Docker, CI/CD, headless servers
+- ℹ️ Master password required (setup on first use)
+
+**For KDE users:** KWallet provides Secret Service by default (system keyring available).
+
+**Note**: Clipboard tools are optional. Without them, use shell pipes:
+```bash
+kcpwd get mykey | xclip -selection clipboard
+```
+
+## Quick Start
+
+```bash
+# Check platform support and configuration
+kcpwd info
+
+# Store a password
+kcpwd set github_token ghp_xxxxxxxxxxxx
+
+# Retrieve password (clipboard on macOS, stdout on Linux)
+kcpwd get github_token
+
+# On Linux, pipe to clipboard manually:
+kcpwd get github_token | xclip -selection clipboard
+
+# Generate strong password
+kcpwd generate -l 20 -s myapp
+
+# List all passwords
+kcpwd list
+```
+
 ## Usage
+
+### Platform Information
+
+```bash
+# Check your platform configuration
+kcpwd info
+
+# Output example (Linux):
+# 🔧 Platform Information
+# ========================================
+# Platform: Linux
+# Supported: ✓ Yes
+# Keyring Backend: D-Bus Secret Service (secretstorage)
+# Clipboard: ✗ Disabled
+# 
+# 💡 Linux Notes:
+#   • Clipboard is disabled (use shell pipes instead)
+#   • Example: kcpwd get key | xclip -selection clipboard
+#   • Requires D-Bus Secret Service (gnome-keyring, KWallet, etc.)
+```
 
 ### CLI Usage
 
@@ -40,547 +151,311 @@ pip install -e .
 # Regular password
 kcpwd set dbadmin asd123
 
-# or shorthand:
+# With master password protection
+kcpwd set prod_db secret --master-password
+
+# Or shorthand:
 kcpwd set-master prod_db secret123
+
+# Check password strength before saving
+kcpwd set myapi weak123 --check-strength
 ```
 
-#### Retrieve a password (copies to clipboard)
+#### Retrieve a password
+
+**macOS (automatic clipboard):**
 ```bash
-# Regular password
+kcpwd get dbadmin
+# Output: ✓ Password for 'dbadmin' copied to clipboard
+```
+
+**Linux (stdout - pipe to clipboard):**
+```bash
+# Print to stdout
 kcpwd get dbadmin
 
-# or shorthand:
+# Or pipe to clipboard (if xclip installed):
+kcpwd get dbadmin | xclip -selection clipboard
+
+# For Wayland (wl-clipboard):
+kcpwd get dbadmin | wl-copy
+```
+
+**Both platforms - print to stdout:**
+```bash
+kcpwd get dbadmin --print
+```
+
+#### Master-protected passwords
+```bash
+# Set with master password
+kcpwd set-master prod_db secret123
+
+# Get with master password
 kcpwd get-master prod_db
+
+# Or use flag:
+kcpwd get prod_db --master-password
 ```
 
 #### Delete a password
 ```bash
-# Regular password
 kcpwd delete dbadmin
-
-# Master-protected password
-kcpwd delete-master prod_db
+kcpwd delete-master prod_db  # for master-protected
 ```
 
-#### List all stored passwords
+#### List all passwords
 ```bash
 kcpwd list
-
-# Shows:
-# Regular passwords (3):
-#   • dbadmin
-#   • api_key
-#   • test_db
-#
-# 🔒 Master-protected passwords (2):
-#   • prod_db 🔒
-#   • production_api 🔒
 ```
 
-**Note:** The `list` command shows regular and master-protected passwords separately. Master-protected passwords require the master password to retrieve.
-
-#### Generate a secure password
+#### Generate passwords
 ```bash
-# Generate a 16-character password (default)
+# Generate with automatic strength check
 kcpwd generate
 
-# Generate a 20-character password
-kcpwd generate -l 20
-
-# Generate without symbols (alphanumeric only)
-kcpwd generate --no-symbols
-
-# Generate and save immediately
+# Generate and save
 kcpwd generate -s myapi
 
-# Generate and save with master password
-kcpwd generate -s prod_api --master-password
+# Generate 20-character password
+kcpwd generate -l 20
 
-# Generate a 6-digit PIN
+# Generate without symbols
+kcpwd generate --no-symbols
+
+# Generate 6-digit PIN
 kcpwd generate -l 6 --no-uppercase --no-lowercase --no-symbols
-
-# Generate without ambiguous characters (no 0/O, 1/l/I)
-kcpwd generate --exclude-ambiguous
 ```
 
 #### Check password strength
 ```bash
-# Check any password
 kcpwd check-strength "MyP@ssw0rd123"
-
-# Check before saving
-kcpwd set myapi password123 --check-strength
 ```
 
-#### Export passwords
+#### Export/Import
 ```bash
-# Export all regular passwords to a JSON file
+# Export passwords
 kcpwd export backup.json
 
-# Export only key names (without passwords)
-kcpwd export keys.json --keys-only
-
-# Force overwrite existing file
-kcpwd export backup.json -f
-```
-
-**⚠️ Security Warning**: 
-- Exported files contain passwords in **PLAIN TEXT**. Keep them secure!
-- **Master-protected passwords are NOT included in exports** for security reasons.
-
-#### Import passwords
-```bash
-# Import passwords (skip existing keys)
+# Import passwords
 kcpwd import backup.json
 
-# Import and overwrite existing passwords
-kcpwd import backup.json --overwrite
-
-# Preview what would be imported without making changes
+# Dry run (preview)
 kcpwd import backup.json --dry-run
 ```
 
 ### Library Usage
 
-#### Basic Functions
+#### Basic Operations
 
 ```python
 from kcpwd import set_password, get_password, delete_password
 
-# Store a password
+# Store password
 set_password("my_database", "secret123")
 
-# Retrieve a password
+# Retrieve password
 password = get_password("my_database")
 print(password)  # Output: secret123
 
-# Retrieve and copy to clipboard
-password = get_password("my_database", copy_to_clip=True)
-
-# Delete a password
+# Delete password
 delete_password("my_database")
 ```
 
-#### Master Password Protection (NEW in v0.4.0!)
+#### Platform Detection
+
+```python
+from kcpwd import get_platform, get_platform_name, check_platform_requirements
+
+# Get current platform
+platform = get_platform()  # 'macos' or 'linux'
+print(f"Running on: {get_platform_name()}")
+
+# Check platform requirements
+status = check_platform_requirements()
+print(f"Supported: {status['supported']}")
+print(f"Keyring: {status['keyring_backend']}")
+print(f"Clipboard: {status['clipboard_available']}")
+```
+
+#### Master Password Protection
 
 ```python
 from kcpwd.master_protection import (
     set_master_password,
     get_master_password,
-    delete_master_password,
     has_master_password,
     list_master_keys
 )
 
-# Store password with master password protection
+# Store with master password
 set_master_password("prod_db", "super_secret", "MyMasterPass123!")
 
-# Retrieve master-protected password
+# Retrieve
 password = get_master_password("prod_db", "MyMasterPass123!")
-print(password)  # Output: super_secret
 
-# Wrong master password returns None
-password = get_master_password("prod_db", "WrongPassword")
-print(password)  # Output: None
-
-# Check if a key has master password protection
+# Check if master-protected
 if has_master_password("prod_db"):
-    print("This password is master-protected")
+    print("This password needs master password")
 
 # List all master-protected keys
 keys = list_master_keys()
-print(keys)  # Output: ['prod_db', 'prod_api']
-
-# Delete master-protected password
-delete_master_password("prod_db")
 ```
 
-#### Password Strength Checker (NEW in v0.4.1!)
+#### Password Strength Checker
 
 ```python
 from kcpwd import check_password_strength
 
-# Check password strength
 result = check_password_strength("MyP@ssw0rd123")
 print(f"Score: {result['score']}/100")
 print(f"Strength: {result['strength_text']}")
-# Output:
-# Score: 75/100
-# Strength: STRONG
 
-# Get detailed feedback
-if result['score'] < 50:
-    for tip in result['feedback']:
-        print(f"  - {tip}")
+# Get feedback
+for tip in result['feedback']:
+    print(f"  - {tip}")
 ```
 
-#### Master Password Decorator (NEW in v0.4.1!)
+#### Decorators (including Master Password)
 
 ```python
-from kcpwd import require_master_password
+from kcpwd import require_password, require_master_password
 
-# Decorator automatically injects master-protected passwords
+# Regular password decorator
+@require_password('my_db')
+def connect_to_db(host, password=None):
+    print(f"Connecting with: {password}")
+
+connect_to_db("localhost")  # Password auto-injected
+
+# Master password decorator (will prompt)
 @require_master_password('prod_db')
-def connect_to_database(host, username, password=None):
-    print(f"Connecting with password: {password}")
-    # Your database connection code here
+def connect_to_prod(host, password=None):
+    print(f"Connecting to prod: {password}")
 
-# Will prompt for master password
-connect_to_database("localhost", "admin")
+connect_to_prod("prod.example.com")  # Prompts for master password
 
-# For automation (no prompt)
+# Automation mode (no prompt)
 import os
 MASTER_PASSWORD = os.getenv('MASTER_PASSWORD')
 
 @require_master_password('prod_db', master_password=MASTER_PASSWORD)
-def automated_backup(password=None):
+def automated_task(password=None):
     # Runs without user interaction
     pass
 ```
 
-**Note**: Decorator supports custom parameter names, prompt messages, and automation modes.
-
-#### Password Generation
-
-```python
-from kcpwd import generate_password
-
-# Generate a secure password
-password = generate_password(length=20)
-print(password)  # Output: 'aB3#xK9!mL2$nP5@qR7&'
-
-# Generate alphanumeric password (no symbols)
-password = generate_password(length=16, use_symbols=False)
-print(password)  # Output: 'aB3xK9mL2nP5qR7t'
-
-# Generate a 6-digit PIN
-pin = generate_password(
-    length=6, 
-    use_uppercase=False, 
-    use_lowercase=False, 
-    use_symbols=False
-)
-print(pin)  # Output: '384729'
-```
-
-#### List All Keys
-
-```python
-from kcpwd import list_all_keys
-from kcpwd.master_protection import list_master_keys
-
-# Get all regular password keys
-keys = list_all_keys()
-print(keys)  # Output: ['my_database', 'api_key', 'email_password']
-
-# Get all master-protected keys
-master_keys = list_master_keys()
-print(master_keys)  # Output: ['prod_db', 'prod_api']
-
-# Check if a specific key exists
-if 'my_database' in list_all_keys():
-    print("Database password exists!")
-```
-
-#### Export/Import
-
-```python
-from kcpwd import export_passwords, import_passwords
-
-# Export all regular passwords
-result = export_passwords('backup.json')
-print(f"Exported {result['exported_count']} passwords")
-
-# Note: Master-protected passwords are NOT included in exports
-
-# Export only keys (without passwords)
-result = export_passwords('keys_only.json', include_passwords=False)
-
-# Import passwords (skip existing)
-result = import_passwords('backup.json')
-print(f"Imported {result['imported_count']} passwords")
-print(f"Skipped {len(result['skipped_keys'])} existing keys")
-
-# Import with overwrite
-result = import_passwords('backup.json', overwrite=True)
-
-# Dry run to preview import
-result = import_passwords('backup.json', dry_run=True)
-print(result['message'])
-```
-
-#### Using Decorators
-
-The `@require_password` decorator automatically injects passwords from keychain:
-
-```python
-from kcpwd import require_password, set_password
-
-# First, store your password
-set_password("my_db", "secret123")
-
-# Use the decorator to auto-inject password
-@require_password('my_db')
-def connect_to_database(host, username, password=None):
-    print(f"Connecting to {host} as {username}")
-    print(f"Password: {password}")
-    # Your database connection code here
-    return f"Connected with password: {password}"
-
-# Call without password - it's automatically retrieved!
-result = connect_to_database("localhost", "admin")
-# Output: Connected with password: secret123
-```
-
-**Note**: `@require_password` works with regular passwords. Use `@require_master_password` for master-protected passwords.
-
-
-### Security Details
+## Security Details
 
 - **Encryption**: AES-256-GCM (authenticated encryption)
 - **Key Derivation**: PBKDF2-SHA256 with 600,000 iterations (OWASP 2023)
-- **Storage**: Separate keychain service (`kcpwd-master`)
+- **Storage**: 
+  - macOS: Native Keychain
+  - Linux: D-Bus Secret Service (gnome-keyring, KWallet)
 - **Master Password**: Not stored anywhere (must be remembered)
 
-### Important Notes
+## Platform-Specific Notes
 
- **Master Password is NOT backed up by kcpwd**
-- If you forget your master password, master-protected passwords **CANNOT be recovered**
-- Store your master password in a safe place (paper backup, different password manager)
-- Each master-protected password is independently encrypted
+### macOS
+- Uses native Keychain Access
+- Passwords accessible via: `security find-generic-password -s kcpwd -a <key> -w`
+- Clipboard integration works automatically
 
- **Master-protected passwords are NOT exported**
-- This is intentional for security
-- Export only includes regular passwords
-- Use separate backup strategy for production credentials
+### Linux
+- Requires D-Bus Secret Service daemon (gnome-keyring, KWallet, etc.)
+- Clipboard is **disabled by default** (security/dependency choice)
+- Use shell pipes for clipboard: `kcpwd get key | xclip -selection clipboard`
+- Works in both X11 and Wayland (with appropriate clipboard tools)
 
-## Export File Format
-
-The export JSON file has the following structure:
-
-```json
-{
-  "exported_at": "2025-01-15T10:30:00.123456",
-  "service": "kcpwd",
-  "version": "0.4.1",
-  "include_passwords": true,
-  "passwords": [
-    {
-      "key": "my_database",
-      "password": "secret123"
-    },
-    {
-      "key": "api_key",
-      "password": "sk-xxxxxxxxxxxxx"
-    }
-  ]
-}
-```
-
-**Note**: Master-protected passwords are not included in exports.
-
-## How It Works
-
-`kcpwd` stores your passwords in the **macOS Keychain** - the same secure, encrypted storage that Safari and other macOS apps use. This means:
-
--  Passwords are encrypted with your Mac's security
--  They persist across reboots
--  They're protected by your Mac's login password
--  No plain text files or databases
--  Can be accessed programmatically via Python
--  **Master-protected passwords have an additional AES-256 encryption layer** (v0.4.0)
-
-### Viewing Your Passwords
-
-Open **Keychain Access** app and search for "kcpwd" to see regular passwords.
-Search for "kcpwd-master" to see master-protected entries (encrypted data).
-
-Or use Terminal:
+**Linux Clipboard Options:**
 ```bash
-# Regular password
-security find-generic-password -s "kcpwd" -a "dbadmin" -w
+# X11 - xclip
+kcpwd get key | xclip -selection clipboard
 
-# Master-protected (shows encrypted data)
-security find-generic-password -s "kcpwd-master" -a "prod_db" -w
+# X11 - xsel
+kcpwd get key | xsel --clipboard
+
+# Wayland - wl-clipboard
+kcpwd get key | wl-copy
 ```
-
-## API Reference
-
-### Regular Password Functions
-
-#### `set_password(key: str, password: str) -> bool`
-Store a password in macOS Keychain.
-
-#### `get_password(key: str, copy_to_clip: bool = False) -> Optional[str]`
-Retrieve a password from macOS Keychain.
-
-#### `delete_password(key: str) -> bool`
-Delete a password from macOS Keychain.
-
-#### `list_all_keys() -> List[str]`
-List all regular password keys.
-
-### Master Password Functions (NEW in v0.4.0)
-
-#### `set_master_password(key: str, password: str, master_password: str) -> bool`
-Store password with master password protection.
-- `key`: Password identifier
-- `password`: The actual password to store
-- `master_password`: Master password to encrypt with
-
-#### `get_master_password(key: str, master_password: str) -> Optional[str]`
-Retrieve master-protected password.
-- Returns `None` if key not found or wrong master password
-
-#### `delete_master_password(key: str) -> bool`
-Delete master-protected password.
-
-#### `has_master_password(key: str) -> bool`
-Check if key is master-protected.
-
-#### `list_master_keys() -> List[str]`
-List all master-protected keys.
-
-### Password Strength Function (NEW in v0.4.1)
-
-#### `check_password_strength(password: str) -> Dict`
-Analyze password strength with detailed feedback.
-
-Returns:
-```python
-{
-    'score': 85,              # 0-100
-    'strength': PasswordStrength.STRONG,
-    'strength_text': 'STRONG',
-    'feedback': ['Password looks good!'],
-    'details': {
-        'length': 13,
-        'has_lowercase': True,
-        'has_uppercase': True,
-        'has_digits': True,
-        'has_symbols': True
-    }
-}
-```
-
-### Decorators
-
-#### `@require_password(key: str, param_name: str = 'password')`
-Decorator that automatically injects password from keychain.
-
-#### `@require_master_password(key: str, param_name: str = 'password', master_password: Optional[str] = None, prompt_message: Optional[str] = None)` (NEW in v0.4.1)
-Decorator that automatically injects master-protected password.
-
-Parameters:
-- `key`: Password identifier
-- `param_name`: Parameter to inject into (default: 'password')
-- `master_password`: Pre-configured master password (for automation)
-- `prompt_message`: Custom prompt message
-
-Example:
-```python
-@require_master_password('prod_db')
-def connect(password=None):
-    pass
-```
-
-### Other Functions
-
-#### `copy_to_clipboard(text: str) -> bool`
-Copy text to macOS clipboard.
-
-#### `generate_password(length=16, use_uppercase=True, use_lowercase=True, use_digits=True, use_symbols=True, exclude_ambiguous=False) -> str`
-Generate a cryptographically secure random password.
-
-#### `export_passwords(filepath: str, include_passwords: bool = True) -> Dict`
-Export regular passwords to JSON file.
-**Note**: Does not include master-protected passwords.
-
-#### `import_passwords(filepath: str, overwrite: bool = False, dry_run: bool = False) -> Dict`
-Import passwords from JSON file.
-
-## Security Notes
-
-**Important Security Considerations:**
-
-### Master Password Protection (v0.4.0)
--  Master password adds AES-256-GCM encryption layer
--  Uses PBKDF2-SHA256 with 600,000 iterations (OWASP 2023)
--  **Master password is NOT backed up** - keep it safe!
--  Each password independently encrypted with unique salt/nonce
--  Master-protected passwords excluded from exports
-
-### General Security
--  Regular passwords stored in macOS Keychain (encrypted by macOS)
--  Export files contain regular passwords in **PLAIN TEXT** - keep secure!
--  Passwords remain in clipboard until you copy something else
--  Consider clearing clipboard after use for sensitive passwords
--  Designed for personal use on trusted devices
--  Always use strong, unique passwords
--  Delete export files immediately after use
--  Never commit export files to version control
 
 ## Requirements
 
-- **macOS only** (uses native Keychain)
-- Python 3.8+ 
-- cryptography>=41.0.0 (for master password protection)
-
-## Development
-
-### Setup development environment
-```bash
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
-pip install -e .
-```
-
-### Run tests
-```bash
-pytest
-pytest -v  # verbose
-pytest test/test_master.py  # master password tests only
-pytest test/test_strength.py  # strength checker tests
-```
+- Python 3.8+
+- **macOS**: Built-in (no extra dependencies)
+- **Linux**: 
+  - D-Bus Secret Service daemon (gnome-keyring, KWallet, etc.)
+  - `secretstorage>=3.3.0` (auto-installed)
+- `cryptography>=41.0.0` (for master password protection)
+- `click>=8.0.0` (for CLI)
+- `keyring>=23.0.0` (for keyring abstraction)
 
 ## Troubleshooting
 
-### `kcpwd list` shows "No passwords stored" but passwords exist
+### Linux Issues
 
-The `list` command uses `security dump-keychain` which:
-- May take 5-10 seconds to complete
-- Requires keychain access permissions
-- May not work if keychain is locked
+**"No secret service available"**
+- Install gnome-keyring: `sudo apt install gnome-keyring`
+- Make sure it's running: `gnome-keyring-daemon --start`
+- For KDE: KWallet should work automatically
 
-**Solutions:**
-1. Make sure your keychain is unlocked
-2. Try accessing passwords directly: `kcpwd get <keyname>`
-3. Use Keychain Access app: Open Keychain Access → Search for "kcpwd"
-4. Check with terminal: `security find-generic-password -s kcpwd`
+**"D-Bus error"**
+- Check D-Bus is running: `ps aux | grep dbus`
+- Set `DBUS_SESSION_BUS_ADDRESS` if needed
 
-### Master Password Issues (v0.4.0)
+**Clipboard not working**
+- Linux clipboard is disabled by design
+- Use shell pipes: `kcpwd get key | xclip -selection clipboard`
+- Install xclip: `sudo apt install xclip`
 
-**"No password found or incorrect master password"**
-- Check you're using the correct master password
-- Master password is case-sensitive
-- If forgotten, password cannot be recovered
+### macOS Issues
 
-**"Passwords do not match" when setting**
-- Retype carefully
-- Make sure both prompts get same password
+**"No passwords found" but they exist**
+- Keychain might be locked
+- Use Keychain Access app to verify
+- Command: `security find-generic-password -s kcpwd`
 
-### Export/Import issues
+## Changelog
 
-**Export shows fewer passwords than expected**
-- Master-protected passwords are NOT included in exports (by design)
-- Use `kcpwd list` to see all passwords
+### v0.5.0 (Current) - Linux Support and Encrypted File Backend
+-  **New**: Full Linux support via D-Bus Secret Service
+-  **New**: Platform detection and info command (`kcpwd info`)
+-  **New**: Optional clipboard support on Linux (xclip, xsel, wl-copy auto-detection)
+-  **New**: Encrypted file backend (AES-256-GCM) for universal compatibility
+-  **New**: Automatic backend detection (system keyring → file fallback)
+-  **New**: `get_backend_info()` API function
+-  Linux uses `secretstorage` for keyring backend
+-  Cross-platform clipboard with automatic fallback
+-  Platform-agnostic keyring operations
+-  Platform utilities module with feature detection 
+-  Zero dependencies required on Linux
+-  Master password for file backend (setup on first use)
 
-**Import fails**
-- Check JSON file format is valid
-- Ensure file has `passwords` array
-- Master-protected passwords cannot be imported
+
+### v0.4.1
+-  `@require_master_password` decorator
+-  Password strength checker with visual feedback
+-  CLI `check-strength` command
+-  `--check-strength` flag for `set` command
+
+### v0.4.0
+-  Per-password master password protection
+-  AES-256-GCM encryption
+-  PBKDF2-SHA256 key derivation (600k iterations)
+
+### v0.3.0
+-  Import/export functionality
+-  `list` command
+
+### v0.2.1
+-  Password generation
+
+### v0.2.0
+-  Python library support
+-  `@require_password` decorator
+
+### v0.1.0
+- 🎉 Initial release (macOS only)
 
 ## License
 
@@ -588,72 +463,18 @@ MIT License - See LICENSE file for details
 
 ## Contributing
 
-Contributions welcome! Please feel free to submit a Pull Request.
-
-## Disclaimer
-
-This is a personal password manager tool. While it uses secure storage (macOS Keychain) and strong encryption for master-protected passwords (AES-256-GCM), please use at your own risk. For enterprise or critical password management, consider established solutions like 1Password, Bitwarden, or similar.
+Contributions welcome! Platform-specific improvements especially appreciated.
 
 ## Roadmap
 
-- [x] Python library support
-- [x] Decorator for automatic password injection
-- [x] Password generation
-- [x] Import/export functionality
-- [x] Master password protection (v0.4.0) 
-- [x] Password strength indicator (v0.4.1)
-- [x] Master password decorator (v0.4.1)
-- [ ] Password history and rotation
-- [ ] Cross-platform support (Linux, Windows)
-- [ ] GUI web UI application
-- [ ] Multi user support
-- [ ] Integration with other password managers
-- [ ] Two-factor authentication support
-
-## Changelog
-
-### v0.4.1 (Current)
-- ✨ **New**: `@require_master_password` decorator for automatic password injection
-- ✨ **New**: Password strength checker with visual feedback and detailed analysis
-- ✨ **New**: CLI command `check-strength` to analyze any password
-- ✨ **New**: `--check-strength` flag for `set` command
-- Enhanced: `generate` command now shows strength automatically
-- Added: 33 comprehensive tests (12 decorator + 21 strength)
-- Zero breaking changes - fully backward compatible
-
-### v0.4.0
-- ** Added per-password master password protection**
-- Each password can optionally be protected with master password
-- AES-256-GCM authenticated encryption for master-protected passwords
-- PBKDF2-SHA256 key derivation with 600,000 iterations (OWASP 2023)
-- New commands: `set-master`, `get-master`, `delete-master` for easier usage
-- CLI flags: `--master-password` / `-m` for set/get/generate commands
-- Master-protected passwords shown separately in `list` command
-- Master-protected passwords excluded from exports (security feature)
-- New `kcpwd.master` module with dedicated functions
-
-### v0.3.0
-- Added import/export functionality for password backups
-- Added `list` command to display all stored keys
-- Added `list_all_keys()` function for programmatic access
-- Improved security warnings for export operations
-- Added dry-run mode for safe import preview
-- Comprehensive import/export tests
-
-### v0.2.1
-- Added cryptographically secure password generation (`generate` command)
-- Generate passwords with customizable length and character types
-- Option to exclude ambiguous characters (0/O, 1/l/I)
-- Generate and save passwords in one command
-- Comprehensive password generation tests
-
-### v0.2.0
-- Added Python library support
-- Added `@require_password` decorator
-- Refactored code into modular structure
-- Enhanced API with better return types
-
-### v0.1.0
-- Initial CLI release
-- Basic password storage and retrieval
-- macOS Keychain integration
+- [x] macOS support
+- [x] Linux support (v0.5.0)
+- [ ] Windows support (Windows Credential Locker)
+- [ ] Optional clipboard on Linux (auto-detect xclip/wl-copy)
+- [ ] GUI application
+- [ ] Password history
+- [ ] Browser extensions
+- [ ] Multi-user support
+- [ ] Cloud sync options
+- [ ] Secret sharing
+- [ ] Multi Node support 

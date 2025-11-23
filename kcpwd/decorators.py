@@ -25,13 +25,6 @@ def require_password(key: str, param_name: str = 'password'):
         ...     # your db connection code here
         >>>
         >>> connect_to_db("localhost")  # Password automatically retrieved
-
-        >>> @require_password('api_key', param_name='api_key')
-        >>> def call_api(endpoint, api_key=None):
-        ...     print(f"Calling {endpoint} with key: {api_key}")
-        ...     # your API call code here
-        >>>
-        >>> call_api("/users")  # API key automatically retrieved
     """
 
     def decorator(func: Callable) -> Callable:
@@ -68,29 +61,11 @@ def require_master_password(
     Example:
         >>> from kcpwd import require_master_password
         >>>
-        >>> # Will prompt for master password at runtime
         >>> @require_master_password('prod_db')
         >>> def connect_to_prod(host, password=None):
         ...     print(f"Connecting to production: {host}")
-        ...     # your db connection code here
         >>>
         >>> connect_to_prod("prod.example.com")  # Will prompt for master password
-
-        >>> # With custom parameter name
-        >>> @require_master_password('prod_api', param_name='api_key')
-        >>> def call_prod_api(endpoint, api_key=None):
-        ...     print(f"Calling production API: {endpoint}")
-        ...     # your API call code here
-        >>>
-        >>> call_prod_api("/users")  # Will prompt for master password
-
-        >>> # Pre-configured master password (use with caution!)
-        >>> import os
-        >>> MASTER_PASSWORD = os.getenv('MASTER_PASSWORD')
-        >>> @require_master_password('prod_db', master_password=MASTER_PASSWORD)
-        >>> def automated_backup(password=None):
-        ...     # Automated task that needs master-protected password
-        ...     pass
     """
 
     def decorator(func: Callable) -> Callable:
