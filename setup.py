@@ -5,10 +5,10 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="kcpwd",
-    version="0.5.0",
+    version="0.6.0",
     author="osmanuygar",
     author_email="osmanuygar@gmail.com",
-    description="Cross-platform Password Manager - Works everywhere! macOS Keychain, Linux Secret Service, or encrypted file storage. Zero dependencies required.",
+    description="Cross-platform Password Manager with Web UI - Works everywhere! macOS Keychain, Linux Secret Service, or encrypted file storage. Zero dependencies required.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/osmanuygar/kcpwd",
@@ -17,10 +17,12 @@ setup(
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
         "Intended Audience :: End Users/Desktop",
+        "Intended Audience :: System Administrators",
         "Topic :: Security",
         "Topic :: Security :: Cryptography",
         "Topic :: Utilities",
         "Topic :: Software Development :: Libraries :: Python Modules",
+        "Topic :: System :: Systems Administration",
         "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.8",
@@ -30,8 +32,10 @@ setup(
         "Programming Language :: Python :: 3.12",
         "Operating System :: MacOS",
         "Operating System :: POSIX :: Linux",
+        "Environment :: Console",
+        "Environment :: Web Environment",
     ],
-    keywords="password manager cli keychain macos linux security decorator library import export backup master-password encryption cross-platform",
+    keywords="password manager cli keychain macos linux security decorator library import export backup master-password encryption cross-platform web-ui fastapi",
     python_requires=">=3.8",
     install_requires=[
         "click>=8.0.0",
@@ -46,6 +50,16 @@ setup(
             "build>=0.10.0",
             "twine>=4.0.0",
             "cryptography>=41.0.0",
+            "black>=23.0.0",
+            "ruff>=0.1.0",
+            "mypy>=1.7.0",
+            "httpx>=0.25.0",
+        ],
+        "ui": [
+            "fastapi>=0.104.0",
+            "uvicorn[standard]>=0.24.0",
+            "pydantic>=2.0.0",
+            "python-multipart>=0.0.6",
         ]
     },
     entry_points={
@@ -53,4 +67,13 @@ setup(
             "kcpwd=kcpwd.cli:cli",
         ],
     },
+    # Include static files
+    package_data={
+        "kcpwd": [
+            "ui/static/*.html",
+            "ui/static/*.css",
+            "ui/static/*.js",
+        ],
+    },
+    include_package_data=True,
 )
