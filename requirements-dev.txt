@@ -2,3 +2,15 @@ pytest>=7.0.0
 pytest-cov>=4.0.0
 build>=0.10.0
 twine>=4.0.0
+
+# UI dependencies (for testing)
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.0.0
+python-multipart>=0.0.6
+httpx>=0.25.0  # For testing FastAPI
+
+# Code quality
+black>=23.0.0
+ruff>=0.1.0
+mypy>=1.7.0

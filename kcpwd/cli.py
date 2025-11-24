@@ -32,7 +32,7 @@ from .platform_utils import (
 
 
 @click.group()
-@click.version_option(version='0.5.1')
+@click.version_option(version='0.6.0')
 def cli():
     """kcpwd - Cross-platform Password Manager (macOS & Linux)"""
     # Check platform support
@@ -473,6 +473,40 @@ def import_cmd(filepath: str, overwrite: bool, dry_run: bool):
     else:
         click.echo(f"✗ {result['message']}", err=True)
 
+
+@cli.command()
+@click.option('--host', default='127.0.0.1', help='Host address (default: 127.0.0.1)')
+@click.option('--port', default=8765, type=int, help='Port number (default: 8765)')
+@click.option('--secret', envvar='KCPWD_UI_SECRET', help='UI access secret (or set KCPWD_UI_SECRET)')
+@click.option('--no-open-browser', is_flag=True, help='Do not open browser automatically')
+def ui(host, port, secret, no_open_browser):
+    """Start the web UI server
+
+    The web UI provides a modern interface for password management.
+
+    Examples:
+        kcpwd ui
+        kcpwd ui --port 8000
+        kcpwd ui --host 0.0.0.0 --port 8080
+        KCPWD_UI_SECRET=mysecret kcpwd ui
+    """
+    try:
+        from .ui.api import start_server
+        start_server(
+            host=host,
+            port=port,
+            secret=secret,
+            open_browser=not no_open_browser
+        )
+    except ImportError as e:
+        click.echo(click.style("❌ UI dependencies not installed", fg='red', bold=True))
+        click.echo("\nTo use the Web UI, install with:")
+        click.echo(click.style("  pip install kcpwd[ui]", fg='yellow'))
+        click.echo("\nOr install dependencies manually:")
+        click.echo("  pip install fastapi uvicorn[standard] pydantic")
+        click.echo(f"\nError details: {e}")
+    except Exception as e:
+        click.echo(click.style(f"❌ Failed to start UI: {e}", fg='red'), err=True)
 
 if __name__ == '__main__':
     cli()

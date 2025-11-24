@@ -1,23 +1,25 @@
 # kcpwd
 
-**Cross-platform Keychain Password Manager CLI & Library** - A simple, secure password manager for **macOS and Linux** that uses native system keyrings. Can be used as both a command-line tool and a Python library.
+**Cross-platform Keychain Password Manager CLI, Library & Web UI** - A powerful password manager for **macOS and Linux** with native system keyring support and modern web interface.
 
-## Features
+## ✨ Features
 
+-  **🌐 NEW: Modern Web UI** - Beautiful web interface with FastAPI backend
 -  **Cross-platform**: Supports macOS and Linux
 -  **Automatic Backend Selection**: System keyring or encrypted file fallback
 -  **Works Everywhere**: Docker, CI/CD, headless servers - no dependencies!
 -  Secure storage using native system keyring (macOS Keychain / Linux Secret Service)
--  **Master Password Protection (v0.4.0)** - Extra protection layer for sensitive passwords
+-  **Master Password Protection** - Extra protection layer for sensitive passwords
 -  Automatic clipboard copying (macOS) / optional on Linux
 -  Cryptographically secure password generation
--  **Password Strength Checker (v0.4.1)** - Analyze password strength with detailed feedback
+-  **Password Strength Checker** - Analyze password strength with detailed feedback
 -  Import/Export functionality for backups
 -  Simple CLI interface
 -  Python library for programmatic access
--  **Decorator support** for automatic password injection (including master-protected passwords)
+-  **Decorator support** for automatic password injection
 -  No passwords stored in plain text
 -  Native OS integration when available
+
 
 ## Platform Support
 
@@ -25,6 +27,7 @@
 - ✅ Native macOS Keychain integration
 - ✅ Automatic clipboard copying with `pbcopy`
 - ✅ Full feature support
+- ✅ Web UI support
 
 ### Linux
 - ✅ **Works immediately - no setup required!**
@@ -32,20 +35,26 @@
 - ✅ Falls back to encrypted file storage if no keyring
 - ✅ Optional clipboard support via `xclip`, `xsel`, or `wl-copy` (auto-detected)
 - ✅ Perfect for Docker, CI/CD, headless servers
+- ✅ Web UI support
 - 📦 Zero required dependencies (secretstorage optional for system keyring)
 
 ## Installation
 
-### From PyPI
+### Basic Installation
 ```bash
 pip install kcpwd
+```
+
+### With Web UI
+```bash
+pip install kcpwd[ui]
 ```
 
 ### From Source
 ```bash
 git clone https://github.com/osmanuygar/kcpwd.git
 cd kcpwd
-pip install -e .
+pip install -e .[ui]  # Install with UI support
 ```
 
 ### Linux Requirements (Optional)
@@ -87,20 +96,9 @@ sudo dnf install wl-clipboard  # Fedora
 sudo pacman -S wl-clipboard   # Arch
 ```
 
-**What if I don't install anything?**
-- ✅ kcpwd uses encrypted file backend (works everywhere!)
-- ✅ AES-256-GCM encryption (secure)
-- ✅ Perfect for Docker, CI/CD, headless servers
-- ℹ️ Master password required (setup on first use)
-
-**For KDE users:** KWallet provides Secret Service by default (system keyring available).
-
-**Note**: Clipboard tools are optional. Without them, use shell pipes:
-```bash
-kcpwd get mykey | xclip -selection clipboard
-```
-
 ## Quick Start
+
+### CLI Usage
 
 ```bash
 # Check platform support and configuration
@@ -112,15 +110,37 @@ kcpwd set github_token ghp_xxxxxxxxxxxx
 # Retrieve password (clipboard on macOS, stdout on Linux)
 kcpwd get github_token
 
-# On Linux, pipe to clipboard manually:
-kcpwd get github_token | xclip -selection clipboard
-
 # Generate strong password
 kcpwd generate -l 20 -s myapp
 
 # List all passwords
 kcpwd list
 ```
+
+### 🌐 Web UI Usage
+
+```bash
+# Start the web UI
+kcpwd ui
+
+# Custom port
+kcpwd ui --port 8000
+
+# With persistent secret
+export KCPWD_UI_SECRET="your-secure-secret"
+kcpwd ui
+```
+
+Then open your browser to `http://localhost:8765` and enter the UI secret shown in the terminal.
+
+**Web UI Features:**
+- 📋 View and manage all passwords
+- 🔍 Search passwords instantly
+- ➕ Add new passwords with strength checking
+- 🎲 Generate secure passwords with custom rules
+- 📤 Export/Import for backups
+- 🔒 Master password support
+- 📊 Real-time statistics
 
 ## Usage
 
@@ -135,16 +155,14 @@ kcpwd info
 # ========================================
 # Platform: Linux
 # Supported: ✓ Yes
-# Keyring Backend: D-Bus Secret Service (secretstorage)
-# Clipboard: ✗ Disabled
-# 
-# 💡 Linux Notes:
-#   • Clipboard is disabled (use shell pipes instead)
-#   • Example: kcpwd get key | xclip -selection clipboard
-#   • Requires D-Bus Secret Service (gnome-keyring, KWallet, etc.)
+# 🔐 Storage Backend
+# ========================================
+# Type: System Keyring
+# Backend: SecretService Keyring
+# Status: ✓ Active (OS-native secure storage)
 ```
 
-### CLI Usage
+### CLI Commands
 
 #### Store a password
 ```bash
@@ -186,29 +204,6 @@ kcpwd get dbadmin | wl-copy
 kcpwd get dbadmin --print
 ```
 
-#### Master-protected passwords
-```bash
-# Set with master password
-kcpwd set-master prod_db secret123
-
-# Get with master password
-kcpwd get-master prod_db
-
-# Or use flag:
-kcpwd get prod_db --master-password
-```
-
-#### Delete a password
-```bash
-kcpwd delete dbadmin
-kcpwd delete-master prod_db  # for master-protected
-```
-
-#### List all passwords
-```bash
-kcpwd list
-```
-
 #### Generate passwords
 ```bash
 # Generate with automatic strength check
@@ -227,21 +222,20 @@ kcpwd generate --no-symbols
 kcpwd generate -l 6 --no-uppercase --no-lowercase --no-symbols
 ```
 
-#### Check password strength
+#### Web UI
 ```bash
-kcpwd check-strength "MyP@ssw0rd123"
-```
+# Start web UI (default: http://127.0.0.1:8765)
+kcpwd ui
 
-#### Export/Import
-```bash
-# Export passwords
-kcpwd export backup.json
+# Custom host and port
+kcpwd ui --host 0.0.0.0 --port 8000
 
-# Import passwords
-kcpwd import backup.json
+# Set persistent secret
+export KCPWD_UI_SECRET="my-secure-secret-key"
+kcpwd ui
 
-# Dry run (preview)
-kcpwd import backup.json --dry-run
+# Open browser automatically (default: yes)
+kcpwd ui --no-open-browser  # Don't open browser
 ```
 
 ### Library Usage
@@ -302,21 +296,7 @@ if has_master_password("prod_db"):
 keys = list_master_keys()
 ```
 
-#### Password Strength Checker
-
-```python
-from kcpwd import check_password_strength
-
-result = check_password_strength("MyP@ssw0rd123")
-print(f"Score: {result['score']}/100")
-print(f"Strength: {result['strength_text']}")
-
-# Get feedback
-for tip in result['feedback']:
-    print(f"  - {tip}")
-```
-
-#### Decorators (including Master Password)
+#### Decorators
 
 ```python
 from kcpwd import require_password, require_master_password
@@ -334,15 +314,37 @@ def connect_to_prod(host, password=None):
     print(f"Connecting to prod: {password}")
 
 connect_to_prod("prod.example.com")  # Prompts for master password
+```
 
-# Automation mode (no prompt)
-import os
-MASTER_PASSWORD = os.getenv('MASTER_PASSWORD')
+### 🌐 Web UI API (Programmatic Access)
 
-@require_master_password('prod_db', master_password=MASTER_PASSWORD)
-def automated_task(password=None):
-    # Runs without user interaction
-    pass
+The Web UI also exposes a REST API that you can use programmatically:
+
+```python
+import requests
+
+# Authenticate
+response = requests.post("http://localhost:8765/api/auth", 
+    json={"secret": "your-ui-secret"})
+token = response.json()["token"]
+
+headers = {"Authorization": f"Bearer {token}"}
+
+# List passwords
+response = requests.get("http://localhost:8765/api/passwords", headers=headers)
+passwords = response.json()
+
+# Get a password
+response = requests.post("http://localhost:8765/api/passwords/retrieve",
+    headers=headers,
+    json={"key": "my_password", "use_master": False})
+password = response.json()["password"]
+
+# Generate password
+response = requests.post("http://localhost:8765/api/generate",
+    headers=headers,
+    json={"length": 20, "use_symbols": True})
+new_password = response.json()["password"]
 ```
 
 ## Security Details
@@ -352,7 +354,10 @@ def automated_task(password=None):
 - **Storage**: 
   - macOS: Native Keychain
   - Linux: D-Bus Secret Service (gnome-keyring, KWallet)
+  - Fallback: Encrypted file (AES-256-GCM)
 - **Master Password**: Not stored anywhere (must be remembered)
+- **Web UI**: Session-based authentication with secure tokens
+- **API**: Bearer token authentication
 
 ## Platform-Specific Notes
 
@@ -360,23 +365,73 @@ def automated_task(password=None):
 - Uses native Keychain Access
 - Passwords accessible via: `security find-generic-password -s kcpwd -a <key> -w`
 - Clipboard integration works automatically
+- Web UI runs on localhost by default
 
 ### Linux
 - Requires D-Bus Secret Service daemon (gnome-keyring, KWallet, etc.)
+- Falls back to encrypted file if no keyring available
 - Clipboard is **disabled by default** (security/dependency choice)
 - Use shell pipes for clipboard: `kcpwd get key | xclip -selection clipboard`
 - Works in both X11 and Wayland (with appropriate clipboard tools)
+- Web UI works perfectly on all Linux distributions
 
-**Linux Clipboard Options:**
+## Web UI Configuration
+
+### Environment Variables
+
 ```bash
-# X11 - xclip
-kcpwd get key | xclip -selection clipboard
+# UI Secret (recommended to set)
+export KCPWD_UI_SECRET="your-secure-random-string"
 
-# X11 - xsel
-kcpwd get key | xsel --clipboard
+# Host (default: 127.0.0.1)
+export KCPWD_UI_HOST="0.0.0.0"
 
-# Wayland - wl-clipboard
-kcpwd get key | wl-copy
+# Port (default: 8765)
+export KCPWD_UI_PORT="8000"
+
+# Enable CORS for separate frontend (default: false)
+export KCPWD_UI_CORS="true"
+
+# Debug mode (default: false)
+export KCPWD_UI_DEBUG="true"
+```
+
+### Deployment
+
+**Development:**
+```bash
+kcpwd ui
+```
+
+**Production (with gunicorn):**
+```bash
+pip install gunicorn
+gunicorn kcpwd.ui.api:app --bind 0.0.0.0:8765 --workers 4
+```
+
+**Docker:**
+```dockerfile
+FROM python:3.11-slim
+RUN pip install kcpwd[ui]
+ENV KCPWD_UI_SECRET="change-me"
+CMD ["kcpwd", "ui", "--host", "0.0.0.0"]
+```
+
+**Systemd Service:**
+```ini
+[Unit]
+Description=kcpwd Web UI
+After=network.target
+
+[Service]
+Type=simple
+User=youruser
+Environment="KCPWD_UI_SECRET=your-secret"
+ExecStart=/usr/local/bin/kcpwd ui --host 127.0.0.1
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
 ```
 
 ## Requirements
@@ -389,8 +444,27 @@ kcpwd get key | wl-copy
 - `cryptography>=41.0.0` (for master password protection)
 - `click>=8.0.0` (for CLI)
 - `keyring>=23.0.0` (for keyring abstraction)
+- **Web UI** (optional):
+  - `fastapi>=0.104.0`
+  - `uvicorn[standard]>=0.24.0`
+  - `pydantic>=2.0.0`
 
 ## Troubleshooting
+
+### Web UI Issues
+
+**"UI files not found"**
+- Make sure you installed with `[ui]` extra: `pip install kcpwd[ui]`
+- Check if files exist: `ls ~/.local/lib/python*/site-packages/kcpwd/ui/static/`
+
+**"Cannot connect to UI"**
+- Check if port is available: `lsof -i :8765`
+- Try different port: `kcpwd ui --port 8000`
+- Check firewall settings
+
+**"Session expired"**
+- Sessions expire after 1 hour by default
+- Just re-authenticate with your UI secret
 
 ### Linux Issues
 
@@ -417,31 +491,35 @@ kcpwd get key | wl-copy
 
 ## Changelog
 
-### v0.5.0 (Current) - Linux Support and Encrypted File Backend
+### v0.6.0 (Current) - Web UI & Enhanced Features
+-  NEW: Modern Web UI** with FastAPI backend
+-  NEW: Beautiful, responsive interface** for password management
+-  NEW: Real-time password strength visualization**
+-  NEW: Interactive password generator** with live preview
+-  NEW: Import/Export via Web UI**
+-  NEW: Session-based authentication**
+-  **REST API** for programmatic access
+-  Enhanced CLI with `kcpwd ui` command
+-  Improved documentation and examples
+-  Better error handling and user feedback
+
+### v0.5.0 - Linux Support and Encrypted File Backend
 -  **New**: Full Linux support via D-Bus Secret Service
 -  **New**: Platform detection and info command (`kcpwd info`)
--  **New**: Optional clipboard support on Linux (xclip, xsel, wl-copy auto-detection)
--  **New**: Encrypted file backend (AES-256-GCM) for universal compatibility
--  **New**: Automatic backend detection (system keyring → file fallback)
+-  **New**: Optional clipboard support on Linux
+-  **New**: Encrypted file backend for universal compatibility
+-  **New**: Automatic backend detection
 -  **New**: `get_backend_info()` API function
--  Linux uses `secretstorage` for keyring backend
--  Cross-platform clipboard with automatic fallback
--  Platform-agnostic keyring operations
--  Platform utilities module with feature detection 
--  Zero dependencies required on Linux
--  Master password for file backend (setup on first use)
-
 
 ### v0.4.1
 -  `@require_master_password` decorator
 -  Password strength checker with visual feedback
 -  CLI `check-strength` command
--  `--check-strength` flag for `set` command
 
 ### v0.4.0
 -  Per-password master password protection
 -  AES-256-GCM encryption
--  PBKDF2-SHA256 key derivation (600k iterations)
+-  PBKDF2-SHA256 key derivation
 
 ### v0.3.0
 -  Import/export functionality
@@ -463,18 +541,82 @@ MIT License - See LICENSE file for details
 
 ## Contributing
 
-Contributions welcome! Platform-specific improvements especially appreciated.
+Contributions welcome! Platform-specific improvements and Web UI enhancements especially appreciated.
+
+### Development Setup
+
+```bash
+# Clone repository
+git clone https://github.com/osmanuygar/kcpwd.git
+cd kcpwd
+
+# Install development dependencies
+pip install -e .[dev,ui]
+
+# Run tests
+pytest
+
+# Code formatting
+black kcpwd/
+ruff check kcpwd/
+
+# Type checking
+mypy kcpwd/
+```
 
 ## Roadmap
 
 - [x] macOS support
-- [x] Linux support (v0.5.0)
+- [x] Linux support
+- [x] Password strength checker
+- [x] Master password protection
+- [x] Web UI with FastAPI
 - [ ] Windows support (Windows Credential Locker)
-- [ ] Optional clipboard on Linux (auto-detect xclip/wl-copy)
-- [ ] GUI application
-- [ ] Password history
+- [ ] Password history tracking
 - [ ] Browser extensions
 - [ ] Multi-user support
 - [ ] Cloud sync options
-- [ ] Secret sharing
-- [ ] Multi Node support 
+- [ ] 2FA/OTP support
+- [ ] Password sharing (encrypted)
+- [ ] Mobile apps
+- [ ] Multi node sync
+- [ ] Advanced reporting and analytics
+
+
+## Screenshots
+
+### CLI
+```bash
+$ kcpwd info
+🔧 Platform Information
+========================================
+Platform: Linux
+Supported: ✓ Yes
+🔐 Storage Backend
+========================================
+Type: System Keyring
+Backend: SecretService Keyring
+Status: ✓ Active (OS-native secure storage)
+```
+
+### Web UI
+Beautiful, modern interface for managing your passwords:
+- Dark/Light theme
+- Responsive design
+- Real-time password strength
+- Interactive password generator
+- Secure session management
+
+## Support
+
+-  [Documentation](https://github.com/osmanuygar/kcpwd)
+-  [Issue Tracker](https://github.com/osmanuygar/kcpwd/issues)
+-  [Discussions](https://github.com/osmanuygar/kcpwd/discussions)
+
+## Star History
+
+If you find kcpwd useful, please ⭐ star the repository!
+
+---
+
+Made with ❤️ by [osmanuygar](https://github.com/osmanuygar)

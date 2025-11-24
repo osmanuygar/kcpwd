@@ -32,7 +32,7 @@ from .platform_utils import (
     check_clipboard_support
 )
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 __all__ = [
     'set_password',
     'get_password',
