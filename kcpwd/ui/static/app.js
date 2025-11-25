@@ -913,7 +913,7 @@ window.addEventListener('unhandledrejection', (event) => {
 
 if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     console.log('%c🔐 kcpwd Web UI - Development Mode', 'color: #667eea; font-size: 14px; font-weight: bold;');
-    console.log('%cVersion: 0.6.0', 'color: #666;');
+    console.log('%cVersion: 0.6.1', 'color: #666;');
 
     // Expose API for debugging
     window.kcpwdAPI = {
@@ -921,7 +921,7 @@ if (window.location.hostname === 'localhost' || window.location.hostname === '12
         passwords: () => allPasswords,
         platformInfo: () => window.platformInfo,
         apiCall: apiCall,
-        version: '0.6.0'
+        version: '0.6.1'
     };
 
     console.log('%cDebug API available at window.kcpwdAPI', 'color: #10b981;');

@@ -47,7 +47,7 @@ pip install kcpwd
 
 ### With Web UI
 ```bash
-pip install kcpwd[ui]
+pip install 'kcpwd[ui]'
 ```
 
 ### From Source
@@ -491,7 +491,7 @@ WantedBy=multi-user.target
 
 ## Changelog
 
-### v0.6.0 (Current) - Web UI & Enhanced Features
+### v0.6.1 (Current) - Web UI & Enhanced Features
 -  NEW: Modern Web UI** with FastAPI backend
 -  NEW: Beautiful, responsive interface** for password management
 -  NEW: Real-time password strength visualization**

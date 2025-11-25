@@ -2,3 +2,6 @@ include README.md
 include LICENSE
 include requirements.txt
 include requirements-dev.txt
+recursive-include kcpwd/ui/static *.html
+recursive-include kcpwd/ui/static *.css
+recursive-include kcpwd/ui/static *.js
