@@ -1,3 +1,11 @@
+
+<p align="left">
+  <img src="https://private-user-images.githubusercontent.com/45356325/519151695-81ae8036-8841-479b-90c0-a76906843c09.png?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NjQxNTkwNTMsIm5iZiI6MTc2NDE1ODc1MywicGF0aCI6Ii80NTM1NjMyNS81MTkxNTE2OTUtODFhZTgwMzYtODg0MS00NzliLTkwYzAtYTc2OTA2ODQzYzA5LnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNTExMjYlMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjUxMTI2VDEyMDU1M1omWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTEyMWMwYjY2MDE3YTFlNjViYWZlODBjNjAwNTlhZmM4NmNlNjhlMDdkZWZiMjZmNTZjMGYyNDVjNWYwYjk2MGUmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.oM9RtYggb-TWVGCXAMUr-IL_HIBx7Bp5fr9_8LK0lfI" width="200">
+</p>
+
+[![PyPI version](https://img.shields.io/pypi/v/kcpwd.svg)](https://pypi.org/project/kcpwd/)
+[![Python Version](https://img.shields.io/pypi/pyversions/kcpwd.svg)](https://pypi.org/project/kcpwd/)
+[![License](https://img.shields.io/pypi/l/kcpwd.svg)]  
 # kcpwd
 
 **Cross-platform Keychain Password Manager CLI, Library & Web UI** - A powerful password manager for **macOS and Linux** with native system keyring support and modern web interface.
