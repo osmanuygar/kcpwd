@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="kcpwd",
-    version="0.6.2",
+    version="0.6.3",
     author="osmanuygar",
     author_email="osmanuygar@gmail.com",
     description="Cross-platform Password Manager with Web UI - Works everywhere! macOS Keychain, Linux Secret Service, or encrypted file storage. Zero dependencies required.",

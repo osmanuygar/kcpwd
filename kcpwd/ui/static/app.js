@@ -930,7 +930,7 @@ window.addEventListener('unhandledrejection', (event) => {
 
 if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     console.log('%c🔐 kcpwd Web UI - Development Mode', 'color: #667eea; font-size: 14px; font-weight: bold;');
-    console.log('%cVersion: 0.6.2', 'color: #666;');
+    console.log('%cVersion: 0.6.3', 'color: #666;');
 
     // Expose API for debugging
     window.kcpwdAPI = {

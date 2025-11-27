@@ -78,7 +78,7 @@ def verify_session(token: str) -> bool:
 app = FastAPI(
     title="kcpwd Web UI",
     description="Password Manager Web Interface",
-    version="0.6.2",
+    version="0.6.3",
     docs_url="/api/docs" if UIConfig.DEBUG else None,
     redoc_url="/api/redoc" if UIConfig.DEBUG else None,
 )
@@ -252,7 +252,7 @@ async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "version": "0.6.2",
+        "version": "0.6.3",
         "timestamp": datetime.now().isoformat()
     }
 
