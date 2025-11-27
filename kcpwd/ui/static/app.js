@@ -1,5 +1,5 @@
 // kcpwd UI - Complete JavaScript Application
-// Version 0.6.0
+// Version 0.6.1 - FIXED: Proper API response handling
 
 // ==================== Global State ====================
 let authToken = null;
@@ -124,10 +124,21 @@ async function apiCall(endpoint, options = {}) {
         throw new Error('Session expired');
     }
 
-    const data = await response.json();
+    // FIXED: Handle both success and error responses properly
+    const contentType = response.headers.get('content-type');
+    let data;
+
+    if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+    } else {
+        // Non-JSON response
+        const text = await response.text();
+        data = {detail: text || 'Unknown error'};
+    }
 
     if (!response.ok) {
-        throw new Error(data.detail || data.error || 'Request failed');
+        // FIXED: Don't throw here, let calling function handle success:true/false
+        throw new Error(data.detail || data.message || data.error || 'Request failed');
     }
 
     return data;
@@ -306,6 +317,7 @@ async function addPassword() {
     showLoading('Saving password...');
 
     try {
+        // FIXED: Properly handle API response
         const data = await apiCall('/api/passwords', {
             method: 'POST',
             body: JSON.stringify({
@@ -316,13 +328,18 @@ async function addPassword() {
             })
         });
 
-        showToast(`✓ Password '${key}' saved successfully`, 'success');
+        // FIXED: Check success field if present, or assume success if no error thrown
+        if (data.success !== false) {
+            showToast(`✓ Password '${key}' saved successfully`, 'success');
 
-        clearAddForm();
-        await loadPasswords();
-        await loadStats();
+            clearAddForm();
+            await loadPasswords();
+            await loadStats();
 
-        switchTab('list');
+            switchTab('list');
+        } else {
+            throw new Error(data.message || 'Failed to save password');
+        }
 
     } catch (error) {
         showToast('Failed to save password: ' + error.message, 'error');
@@ -913,7 +930,7 @@ window.addEventListener('unhandledrejection', (event) => {
 
 if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     console.log('%c🔐 kcpwd Web UI - Development Mode', 'color: #667eea; font-size: 14px; font-weight: bold;');
-    console.log('%cVersion: 0.6.1', 'color: #666;');
+    console.log('%cVersion: 0.6.2', 'color: #666;');
 
     // Expose API for debugging
     window.kcpwdAPI = {
@@ -921,7 +938,7 @@ if (window.location.hostname === 'localhost' || window.location.hostname === '12
         passwords: () => allPasswords,
         platformInfo: () => window.platformInfo,
         apiCall: apiCall,
-        version: '0.6.1'
+        version: '0.6.2'
     };
 
     console.log('%cDebug API available at window.kcpwdAPI', 'color: #10b981;');

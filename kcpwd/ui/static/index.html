@@ -4,14 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>kcpwd - Password Manager</title>
+    <link rel="icon" type="image/png" sizes="40x40" href="/static/kcpwd_logo.png">
     <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
     <div class="container">
         <!-- Header -->
         <div class="header">
-            <h1>🔐 kcpwd Password Manager</h1>
-            <p id="backend-info">Web UI v0.6.1</p>
+            <div class="header-logo">
+                <img src="/static/kcpwd_logo.png" alt="kcpwd Logo" class="logo-image" onerror="this.style.display='none'">
+                <div class="header-text">
+                    <h1>kcpwd Password Manager</h1>
+                    <p id="backend-info">Web UI v0.6.2</p>
+                </div>
+            </div>
             <div id="session-info" class="hidden">
                 <div class="status">
                     <span id="session-status"></span>

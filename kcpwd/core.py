@@ -282,7 +282,7 @@ def export_passwords(filepath: str, include_passwords: bool = True) -> Dict:
         export_data = {
             'exported_at': datetime.now().isoformat(),
             'service': SERVICE_NAME,
-            'version': '0.6.1',
+            'version': '0.6.2',
             'include_passwords': include_passwords,
             'passwords': []
         }
