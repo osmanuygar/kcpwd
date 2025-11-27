@@ -499,25 +499,26 @@ WantedBy=multi-user.target
 
 ## Changelog
 
-### v0.6.1 (Current) - Web UI & Enhanced Features
+### v0.6.3 (Current) - Web UI & Enhanced Features
 -  NEW: Modern Web UI** with FastAPI backend
 -  NEW: Beautiful, responsive interface** for password management
 -  NEW: Real-time password strength visualization**
 -  NEW: Interactive password generator** with live preview
 -  NEW: Import/Export via Web UI**
 -  NEW: Session-based authentication**
+-  NEW: enhanced UI with logo
 -  **REST API** for programmatic access
 -  Enhanced CLI with `kcpwd ui` command
 -  Improved documentation and examples
 -  Better error handling and user feedback
 
 ### v0.5.0 - Linux Support and Encrypted File Backend
--  **New**: Full Linux support via D-Bus Secret Service
--  **New**: Platform detection and info command (`kcpwd info`)
--  **New**: Optional clipboard support on Linux
--  **New**: Encrypted file backend for universal compatibility
--  **New**: Automatic backend detection
--  **New**: `get_backend_info()` API function
+-   Full Linux support via D-Bus Secret Service
+-   Platform detection and info command (`kcpwd info`)
+-   Optional clipboard support on Linux
+-   Encrypted file backend for universal compatibility
+-   Automatic backend detection
+-   `get_backend_info()` API function
 
 ### v0.4.1
 -  `@require_master_password` decorator

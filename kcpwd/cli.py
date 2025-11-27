@@ -32,7 +32,7 @@ from .platform_utils import (
 
 
 @click.group()
-@click.version_option(version='0.6.1')
+@click.version_option(version='0.6.3')
 def cli():
     """kcpwd - Cross-platform Password Manager (macOS & Linux)"""
     # Check platform support

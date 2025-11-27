@@ -763,3 +763,53 @@ button:disabled {
         max-width: none;
     }
 }
+
+/* Logo styling additions for kcpwd UI */
+
+.header-logo {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.logo-image {
+    width: 60px;
+    height: 60px;
+    object-fit: contain;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease;
+    flex-shrink: 0;
+}
+
+.logo-image:hover {
+    transform: scale(1.08);
+}
+
+.header-text {
+    flex: 1;
+}
+
+.header-text h1 {
+    margin-bottom: 5px;
+}
+
+.header-text p {
+    margin: 0;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+    .header-logo {
+        gap: 14px;
+    }
+
+    .logo-image {
+        width: 48px;
+        height: 48px;
+    }
+
+    .header-text h1 {
+        font-size: 1.3rem;
+    }
+}
