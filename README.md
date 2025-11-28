@@ -499,14 +499,22 @@ WantedBy=multi-user.target
 
 ## Changelog
 
+### v0.6.4 - Password Sharing
+-  NEW: Pastebin-style temporary password sharing
+-  Time-based expiration (5m - 3h)
+-  Multiple security options (anyone/once/password)
+-  Access logging and statistics
+-  Beautiful share access pages
+-  Automatic cleanup
+
 ### v0.6.3 (Current) - Web UI & Enhanced Features
--  NEW: Modern Web UI** with FastAPI backend
--  NEW: Beautiful, responsive interface** for password management
--  NEW: Real-time password strength visualization**
--  NEW: Interactive password generator** with live preview
--  NEW: Import/Export via Web UI**
--  NEW: Session-based authentication**
--  NEW: enhanced UI with logo
+-  Modern Web UI** with FastAPI backend
+-  Beautiful, responsive interface** for password management
+-  Real-time password strength visualization**
+-  Interactive password generator** with live preview
+-  Import/Export via Web UI**
+-  Session-based authentication**
+-  Enhanced UI with logo
 -  **REST API** for programmatic access
 -  Enhanced CLI with `kcpwd ui` command
 -  Improved documentation and examples
@@ -610,7 +618,7 @@ Status: ✓ Active (OS-native secure storage)
 
 ### Web UI
 Beautiful, modern interface for managing your passwords:
-- Dark/Light theme
+- Dark theme
 - Responsive design
 - Real-time password strength
 - Interactive password generator
