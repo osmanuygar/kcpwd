@@ -1,5 +1,5 @@
 // kcpwd UI - Complete JavaScript Application
-// Version 0.6.1 - FIXED: Proper API response handling
+// Version 0.6.4 - WITH PASSWORD SHARING
 
 // ==================== Global State ====================
 let authToken = null;
@@ -124,20 +124,17 @@ async function apiCall(endpoint, options = {}) {
         throw new Error('Session expired');
     }
 
-    // FIXED: Handle both success and error responses properly
     const contentType = response.headers.get('content-type');
     let data;
 
     if (contentType && contentType.includes('application/json')) {
         data = await response.json();
     } else {
-        // Non-JSON response
         const text = await response.text();
         data = {detail: text || 'Unknown error'};
     }
 
     if (!response.ok) {
-        // FIXED: Don't throw here, let calling function handle success:true/false
         throw new Error(data.detail || data.message || data.error || 'Request failed');
     }
 
@@ -156,7 +153,6 @@ async function loadInfo() {
         document.getElementById('session-status').textContent =
             `✓ Session Active (${data.session.active_sessions} sessions)`;
 
-        // Store platform details for tools tab
         window.platformInfo = data;
         updatePlatformDetails();
 
@@ -189,7 +185,6 @@ async function loadStats() {
         document.getElementById('stats-info').textContent =
             `Total: ${data.total} passwords (${data.regular} regular, ${data.master_protected} master-protected)`;
 
-        // Update stats in tools tab
         updateStatsDetails(data);
 
     } catch (error) {
@@ -317,7 +312,6 @@ async function addPassword() {
     showLoading('Saving password...');
 
     try {
-        // FIXED: Properly handle API response
         const data = await apiCall('/api/passwords', {
             method: 'POST',
             body: JSON.stringify({
@@ -328,7 +322,6 @@ async function addPassword() {
             })
         });
 
-        // FIXED: Check success field if present, or assume success if no error thrown
         if (data.success !== false) {
             showToast(`✓ Password '${key}' saved successfully`, 'success');
 
@@ -491,7 +484,6 @@ async function generatePassword() {
         exclude_ambiguous: document.getElementById('gen-ambiguous').checked
     };
 
-    // Validate at least one type
     if (!data.use_uppercase && !data.use_lowercase && !data.use_digits && !data.use_symbols) {
         showToast('Please select at least one character type', 'error');
         return;
@@ -509,7 +501,6 @@ async function generatePassword() {
         document.getElementById('generated-password').type = 'password';
         document.getElementById('generated-result').classList.remove('hidden');
 
-        // Display strength
         const strengthClass = result.strength.level.toLowerCase().replace(' ', '-');
         const fillEl = document.getElementById('gen-strength-fill');
         fillEl.className = `strength-fill ${strengthClass}`;
@@ -520,7 +511,6 @@ async function generatePassword() {
         levelEl.textContent = result.strength.level;
         levelEl.className = `level ${strengthClass}`;
 
-        // Display feedback if any
         if (result.strength.feedback && result.strength.feedback.length > 0) {
             document.getElementById('gen-feedback').classList.remove('hidden');
             document.getElementById('gen-feedback-list').innerHTML =
@@ -616,7 +606,6 @@ async function exportPasswords() {
     try {
         const data = await apiCall(`/api/export?include_passwords=${includePasswords}`);
 
-        // Create download
         const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -668,7 +657,6 @@ async function importPasswords() {
         await loadPasswords();
         await loadStats();
 
-        // Clear file input
         fileInput.value = '';
 
     } catch (error) {
@@ -732,6 +720,258 @@ function updatePlatformDetails() {
     document.getElementById('platform-details').innerHTML = html;
 }
 
+// ==================== Password Sharing (NEW) ====================
+
+function toggleShareAccessPassword() {
+    const accessType = document.getElementById('share-access-type').value;
+    const passwordInput = document.getElementById('share-access-password');
+
+    if (accessType === 'password') {
+        passwordInput.classList.remove('hidden');
+    } else {
+        passwordInput.classList.add('hidden');
+        passwordInput.value = '';
+    }
+
+    const maxViewsInput = document.getElementById('share-max-views');
+    if (accessType === 'once') {
+        maxViewsInput.value = '1';
+        maxViewsInput.disabled = true;
+    } else {
+        maxViewsInput.disabled = false;
+    }
+}
+
+function toggleShareMasterPassword() {
+    const checkbox = document.getElementById('share-require-master');
+    const input = document.getElementById('share-master-password');
+
+    if (checkbox.checked) {
+        input.classList.remove('hidden');
+    } else {
+        input.classList.add('hidden');
+        input.value = '';
+    }
+}
+
+async function loadShareTab() {
+    try {
+        const data = await apiCall('/api/passwords');
+
+        const select = document.getElementById('share-key-select');
+        select.innerHTML = '<option value="">-- Select a password --</option>';
+
+        data.regular.forEach(key => {
+            const option = document.createElement('option');
+            option.value = key;
+            option.textContent = key;
+            select.appendChild(option);
+        });
+
+        data.master_protected.forEach(key => {
+            const option = document.createElement('option');
+            option.value = key;
+            option.textContent = `${key} 🔒`;
+            option.dataset.isMaster = 'true';
+            select.appendChild(option);
+        });
+
+        await Promise.all([
+            loadActiveShares(),
+            loadShareStats()
+        ]);
+
+    } catch (error) {
+        showToast('Failed to load passwords: ' + error.message, 'error');
+    }
+}
+
+async function createShare() {
+    const key = document.getElementById('share-key-select').value;
+    const duration = document.getElementById('share-duration').value;
+    const accessType = document.getElementById('share-access-type').value;
+    const accessPassword = document.getElementById('share-access-password').value;
+    const maxViews = document.getElementById('share-max-views').value;
+    const requireMaster = document.getElementById('share-require-master').checked;
+    const masterPassword = document.getElementById('share-master-password').value;
+
+    if (!key) {
+        showToast('Please select a password to share', 'error');
+        return;
+    }
+
+    if (accessType === 'password' && !accessPassword) {
+        showToast('Please enter an access password', 'error');
+        return;
+    }
+
+    if (requireMaster && !masterPassword) {
+        showToast('Please enter master password', 'error');
+        return;
+    }
+
+    showLoading('Creating share link...');
+
+    try {
+        const requestData = {
+            key: key,
+            duration: duration,
+            access_type: accessType,
+            access_password: accessPassword || undefined,
+            max_views: maxViews ? parseInt(maxViews) : undefined,
+            require_master: requireMaster,
+            master_password: masterPassword || undefined
+        };
+
+        const data = await apiCall('/api/share/create', {
+            method: 'POST',
+            body: JSON.stringify(requestData)
+        });
+
+        document.getElementById('share-link-url').value = data.share_url;
+
+        const durationMap = {
+            '5m': '5 minutes',
+            '15m': '15 minutes',
+            '30m': '30 minutes',
+            '1h': '1 hour',
+            '3h': '3 hours'
+        };
+
+        document.getElementById('share-link-info').innerHTML = `
+            <p><strong>Duration:</strong> ${durationMap[duration]}</p>
+            <p><strong>Access Type:</strong> ${accessType}</p>
+            <p><strong>Max Views:</strong> ${data.max_views || 'Unlimited'}</p>
+            <p><strong>Expires:</strong> ${new Date(data.expires_at).toLocaleString()}</p>
+        `;
+
+        document.getElementById('share-link-warning').textContent =
+            `This link expires in ${durationMap[duration]}`;
+
+        document.getElementById('share-link-modal').classList.remove('hidden');
+
+        await loadActiveShares();
+
+        showToast('✓ Share link created successfully', 'success');
+
+    } catch (error) {
+        showToast('Failed to create share: ' + error.message, 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+function copyShareLink() {
+    const url = document.getElementById('share-link-url').value;
+    copyToClipboard(url);
+    showToast('✓ Share link copied to clipboard', 'success');
+}
+
+function closeShareLinkModal(event) {
+    if (event && event.target !== event.currentTarget) {
+        return;
+    }
+    document.getElementById('share-link-modal').classList.add('hidden');
+}
+
+async function loadActiveShares() {
+    try {
+        const data = await apiCall('/api/shares');
+
+        const listEl = document.getElementById('active-shares-list');
+
+        if (data.shares.length === 0) {
+            listEl.innerHTML = '<p class="text-muted">No active shares</p>';
+            return;
+        }
+
+        listEl.innerHTML = data.shares.map(share => {
+            const expiresAt = new Date(share.expires_at);
+            const timeRemaining = share.time_remaining;
+
+            return `
+                <div class="password-item">
+                    <div class="password-item-info">
+                        <strong>${escapeHtml(share.key_name)}</strong>
+                        <small style="color: #999; margin-left: 10px;">
+                            ${share.access_type} • ${share.view_count}/${share.max_views || '∞'} views
+                        </small>
+                    </div>
+                    <div class="password-item-actions">
+                        <button class="btn-secondary btn-small" onclick="copyShareUrl('${share.share_id}')">
+                            📋 Copy Link
+                        </button>
+                        <button class="btn-danger btn-small" onclick="deleteShare('${share.share_id}')">
+                            🗑️ Delete
+                        </button>
+                    </div>
+                </div>
+                <div style="padding: 10px; background: #f9fafb; border-radius: 4px; margin: 5px 0; font-size: 0.85rem;">
+                    <div style="color: #666;">
+                        Expires: ${expiresAt.toLocaleString()} (${timeRemaining})
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+    } catch (error) {
+        console.error('Load active shares error:', error);
+    }
+}
+
+function copyShareUrl(shareId) {
+    const baseUrl = window.location.origin;
+    const shareUrl = `${baseUrl}/s/${shareId}`;
+    copyToClipboard(shareUrl);
+    showToast('✓ Share link copied', 'success');
+}
+
+async function deleteShare(shareId) {
+    if (!confirm('Delete this share link? Anyone with the link will no longer be able to access it.')) {
+        return;
+    }
+
+    try {
+        await apiCall(`/api/share/${shareId}`, {
+            method: 'DELETE'
+        });
+
+        showToast('✓ Share deleted', 'success');
+        await loadActiveShares();
+
+    } catch (error) {
+        showToast('Failed to delete share: ' + error.message, 'error');
+    }
+}
+
+async function loadShareStats() {
+    try {
+        const data = await apiCall('/api/shares/stats');
+
+        const html = `
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+                <div style="background: #f0f9ff; padding: 20px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 2rem; font-weight: bold; color: #3b82f6;">${data.active_shares}</div>
+                    <div style="color: #666; margin-top: 5px;">Active</div>
+                </div>
+                <div style="background: #f0fdf4; padding: 20px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 2rem; font-weight: bold; color: #10b981;">${data.total_views}</div>
+                    <div style="color: #666; margin-top: 5px;">Total Views</div>
+                </div>
+                <div style="background: #fef3c7; padding: 20px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 2rem; font-weight: bold; color: #f59e0b;">${data.total_shares}</div>
+                    <div style="color: #666; margin-top: 5px;">All Time</div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('share-stats').innerHTML = html;
+
+    } catch (error) {
+        console.error('Load share stats error:', error);
+    }
+}
+
 // ==================== Utility Functions ====================
 
 function switchTab(tabName) {
@@ -752,6 +992,8 @@ function switchTab(tabName) {
         loadPasswords();
     } else if (tabName === 'tools') {
         loadStats();
+    } else if (tabName === 'share') {
+        loadShareTab();
     }
 }
 
@@ -787,7 +1029,6 @@ function copyToClipboard(text) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text);
     } else {
-        // Fallback
         const textarea = document.createElement('textarea');
         textarea.value = text;
         textarea.style.position = 'fixed';
@@ -819,7 +1060,6 @@ function hideLoading() {
 let toastTimeout = null;
 
 function showToast(message, type = 'success') {
-    // Clear existing toast
     const existingToast = document.querySelector('.toast');
     if (existingToast) {
         existingToast.remove();
@@ -829,7 +1069,6 @@ function showToast(message, type = 'success') {
         clearTimeout(toastTimeout);
     }
 
-    // Create toast
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
 
@@ -848,7 +1087,6 @@ function showToast(message, type = 'success') {
 
     document.body.appendChild(toast);
 
-    // Auto remove after 5 seconds
     toastTimeout = setTimeout(() => {
         toast.remove();
     }, 5000);
@@ -857,7 +1095,6 @@ function showToast(message, type = 'success') {
 // ==================== Keyboard Shortcuts ====================
 
 document.addEventListener('keydown', (e) => {
-    // Ctrl/Cmd + K: Focus search
     if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
         const searchInput = document.getElementById('search-input');
@@ -866,11 +1103,11 @@ document.addEventListener('keydown', (e) => {
         }
     }
 
-    // Escape: Close modals
     if (e.key === 'Escape') {
         closeViewModal();
         closeSaveModal();
         closeDeleteModal();
+        closeShareLinkModal();
     }
 });
 
@@ -887,7 +1124,7 @@ function startAutoRefresh() {
         } catch (error) {
             console.error('Auto-refresh error:', error);
         }
-    }, 30000); // 30 seconds
+    }, 30000);
 }
 
 function stopAutoRefresh() {
@@ -897,7 +1134,6 @@ function stopAutoRefresh() {
     }
 }
 
-// Start auto-refresh when authenticated
 window.addEventListener('DOMContentLoaded', () => {
     const observer = new MutationObserver(() => {
         const mainContent = document.getElementById('main-content');
@@ -930,18 +1166,17 @@ window.addEventListener('unhandledrejection', (event) => {
 
 if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     console.log('%c🔐 kcpwd Web UI - Development Mode', 'color: #667eea; font-size: 14px; font-weight: bold;');
-    console.log('%cVersion: 0.6.3', 'color: #666;');
+    console.log('%cVersion: 0.6.4 (with Password Sharing)', 'color: #666;');
 
-    // Expose API for debugging
     window.kcpwdAPI = {
         authToken: () => authToken,
         passwords: () => allPasswords,
         platformInfo: () => window.platformInfo,
         apiCall: apiCall,
-        version: '0.6.2'
+        version: '0.6.4'
     };
 
     console.log('%cDebug API available at window.kcpwdAPI', 'color: #10b981;');
 }
 
-console.log('✓ kcpwd UI loaded successfully');
+console.log('✓ kcpwd UI v0.6.4 loaded successfully (with Password Sharing)');
