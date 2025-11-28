@@ -15,7 +15,7 @@
                 <img src="/static/kcpwd_logo.png" alt="kcpwd Logo" class="logo-image" onerror="this.style.display='none'">
                 <div class="header-text">
                     <h1>kcpwd Password Manager</h1>
-                    <p id="backend-info">Web UI v0.6.3</p>
+                    <p id="backend-info">Web UI v0.6.4</p>
                 </div>
             </div>
             <div id="session-info" class="hidden">
@@ -76,6 +76,10 @@
                 </button>
                 <button class="tab" onclick="switchTab('tools')">
                     🛠️ Tools
+                </button>
+                <!-- NEW: Share Tab -->
+                <button class="tab" onclick="switchTab('share')">
+                    🔗 Share
                 </button>
             </div>
 
@@ -348,6 +352,110 @@
                     </div>
                 </div>
             </div>
+
+            <!-- NEW: Share Tab -->
+            <div id="share-tab" class="tab-content hidden">
+                <h2>Share Passwords Securely</h2>
+                <p class="text-muted mb-2">
+                    Create temporary, secure links to share passwords without sending them via email or chat
+                </p>
+
+                <!-- Create Share Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">🔗 Create Share Link</div>
+                    </div>
+
+                    <label for="share-key-select">Select Password to Share:</label>
+                    <select id="share-key-select">
+                        <option value="">-- Select a password --</option>
+                    </select>
+
+                    <label for="share-duration">Link Duration:</label>
+                    <select id="share-duration">
+                        <option value="5m">5 minutes</option>
+                        <option value="15m">15 minutes</option>
+                        <option value="30m">30 minutes</option>
+                        <option value="1h" selected>1 hour</option>
+                        <option value="3h">3 hours</option>
+                    </select>
+
+                    <label for="share-access-type">Access Type:</label>
+                    <select id="share-access-type" onchange="toggleShareAccessPassword()">
+                        <option value="anyone" selected>Anyone with link</option>
+                        <option value="once">One-time access (link expires after viewing)</option>
+                        <option value="password">Require password to access</option>
+                    </select>
+
+                    <input
+                        type="password"
+                        id="share-access-password"
+                        placeholder="Access password (others will need this)"
+                        class="hidden"
+                    >
+
+                    <label for="share-max-views">Maximum Views (optional):</label>
+                    <input
+                        type="number"
+                        id="share-max-views"
+                        placeholder="Leave empty for unlimited"
+                        min="1"
+                        max="100"
+                    >
+
+                    <label>
+                        <input type="checkbox" id="share-require-master" onchange="toggleShareMasterPassword()">
+                        🔒 This password is master-protected
+                    </label>
+
+                    <input
+                        type="password"
+                        id="share-master-password"
+                        placeholder="Master password"
+                        class="hidden"
+                    >
+
+                    <div class="feedback-list" style="background: #fff3cd; border-color: #f59e0b;">
+                        <h4>🔒 Security Tips</h4>
+                        <ul>
+                            <li>Share links expire automatically after the set duration</li>
+                            <li>One-time links are deleted after first access</li>
+                            <li>Use password protection for sensitive passwords</li>
+                            <li>Share links via secure channels (Signal, encrypted email)</li>
+                            <li>Never share links in public forums or social media</li>
+                        </ul>
+                    </div>
+
+                    <button class="btn-primary" onclick="createShare()">
+                        🔗 Create Share Link
+                    </button>
+                </div>
+
+                <!-- Active Shares Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">📋 Active Shares</div>
+                        <button class="btn-secondary btn-small" onclick="loadActiveShares()">
+                            🔄 Refresh
+                        </button>
+                    </div>
+
+                    <div id="active-shares-list">
+                        <p class="text-muted">No active shares</p>
+                    </div>
+                </div>
+
+                <!-- Share Stats Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">📊 Sharing Statistics</div>
+                    </div>
+
+                    <div id="share-stats">
+                        <p>Loading...</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -465,6 +573,47 @@
                 </button>
                 <button class="btn-secondary" onclick="closeDeleteModal()">
                     Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NEW: Share Link Modal -->
+    <div id="share-link-modal" class="modal-overlay hidden" onclick="closeShareLinkModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title">🔗 Share Link Created</h3>
+                <button class="modal-close" onclick="closeShareLinkModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <p><strong>Your share link is ready!</strong></p>
+
+                <div style="background: #f9fafb; padding: 15px; border-radius: 8px; margin: 15px 0; border: 2px solid #10b981;">
+                    <input
+                        type="text"
+                        id="share-link-url"
+                        readonly
+                        style="font-family: monospace; font-size: 0.9rem; border: none; background: transparent; width: 100%;"
+                    >
+                </div>
+
+                <div id="share-link-info" style="font-size: 0.9rem; color: #666;"></div>
+
+                <div class="feedback-list" style="background: #fee; border-color: #ef4444; margin-top: 15px;">
+                    <h4>⚠️ Important</h4>
+                    <ul>
+                        <li id="share-link-warning">This link will expire soon</li>
+                        <li>Share only via secure channels</li>
+                        <li>Link cannot be recovered once closed</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-success" onclick="copyShareLink()">
+                    📋 Copy Link
+                </button>
+                <button class="btn-secondary" onclick="closeShareLinkModal()">
+                    Close
                 </button>
             </div>
         </div>

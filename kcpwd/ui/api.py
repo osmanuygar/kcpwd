@@ -1,9 +1,10 @@
 """
 kcpwd.ui.api - Web UI Backend
 FastAPI-based REST API for password management
+UPDATED: Now includes password sharing functionality
 """
 
-from fastapi import FastAPI, HTTPException, Depends, Security, status
+from fastapi import FastAPI, HTTPException, Depends, Security, status, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -28,6 +29,18 @@ from ..master_protection import (
 )
 from ..platform_utils import check_platform_requirements
 from .config import UIConfig
+
+# Import sharing functionality
+try:
+    from .sharing import (
+        ShareCreate, ShareAccess, SharedPassword, ShareDuration,
+        ShareAccessType, generate_share_id, hash_password,
+        get_duration_timedelta, get_share_manager, get_client_ip
+    )
+    SHARING_ENABLED = True
+except ImportError:
+    SHARING_ENABLED = False
+    print("⚠️ Sharing module not available")
 
 # ============= Security =============
 
@@ -77,8 +90,8 @@ def verify_session(token: str) -> bool:
 
 app = FastAPI(
     title="kcpwd Web UI",
-    description="Password Manager Web Interface",
-    version="0.6.3",
+    description="Password Manager Web Interface with Sharing",
+    version="0.6.4",
     docs_url="/api/docs" if UIConfig.DEBUG else None,
     redoc_url="/api/redoc" if UIConfig.DEBUG else None,
 )
@@ -194,6 +207,8 @@ async def root():
         <html>
         <head>
             <title>kcpwd UI - Setup Required</title>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
                 body {
                     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -252,7 +267,8 @@ async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "version": "0.6.3",
+        "version": "0.6.4",
+        "sharing_enabled": SHARING_ENABLED,
         "timestamp": datetime.now().isoformat()
     }
 
@@ -263,10 +279,11 @@ async def debug_info():
     if not UIConfig.DEBUG:
         raise HTTPException(status_code=404, detail="Not found")
 
-    return {
+    info = {
         "secret_set": _ui_secret is not None,
         "secret_length": len(_ui_secret) if _ui_secret else 0,
         "active_sessions": len(_sessions),
+        "sharing_enabled": SHARING_ENABLED,
         "config": {
             "HOST": UIConfig.HOST,
             "PORT": UIConfig.PORT,
@@ -274,6 +291,15 @@ async def debug_info():
             "SECRET_ENV_SET": UIConfig.SECRET is not None
         }
     }
+
+    if SHARING_ENABLED:
+        try:
+            manager = get_share_manager()
+            info["share_stats"] = manager.get_stats()
+        except:
+            pass
+
+    return info
 
 
 @app.post("/api/auth")
@@ -330,6 +356,9 @@ async def get_info(token: str = Depends(verify_token)):
         "session": {
             "active_sessions": len(_sessions),
             "timeout": UIConfig.SESSION_TIMEOUT
+        },
+        "features": {
+            "sharing": SHARING_ENABLED
         }
     }
 
@@ -536,7 +565,7 @@ async def generate_new_password(data: GenerateRequest, token: str = Depends(veri
         raise HTTPException(500, str(e))
 
 
-@app.post("/api/check-strength")
+@app.get("/api/check-strength")
 async def check_strength(password: str, token: str = Depends(verify_token)):
     """Check password strength"""
     result = check_password_strength(password)
@@ -632,6 +661,580 @@ async def get_statistics(token: str = Depends(verify_token)):
         raise HTTPException(500, str(e))
 
 
+# ============= Password Sharing Endpoints =============
+
+if SHARING_ENABLED:
+
+    @app.post("/api/share/create")
+    async def create_share(
+        data: ShareCreate,
+        request: Request,
+        token: str = Depends(verify_token)
+    ):
+        """Create a shareable link for a password"""
+        try:
+            # Get the password
+            if data.require_master or has_master_password(data.key):
+                if not data.master_password:
+                    raise HTTPException(400, "Master password required")
+                password = get_master_password(data.key, data.master_password)
+            else:
+                password = get_password(data.key)
+
+            if not password:
+                raise HTTPException(404, f"Password '{data.key}' not found")
+
+            # Create share
+            share_id = generate_share_id()
+            now = datetime.now()
+            expires_at = now + get_duration_timedelta(data.duration)
+
+            # Hash access password if provided
+            access_password_hash = None
+            if data.access_type == ShareAccessType.PASSWORD and data.access_password:
+                access_password_hash = hash_password(data.access_password)
+
+            # Get client IP
+            client_ip = get_client_ip(request)
+
+            # Create shared password object
+            shared_password = SharedPassword(
+                share_id=share_id,
+                password=password,
+                key_name=data.key,
+                created_at=now,
+                expires_at=expires_at,
+                access_type=data.access_type,
+                access_password_hash=access_password_hash,
+                max_views=data.max_views if data.access_type != ShareAccessType.ONCE else 1,
+                creator_ip=client_ip,
+                metadata={
+                    'original_key': data.key,
+                    'duration': data.duration.value,
+                    'has_master': data.require_master
+                }
+            )
+
+            # Add to manager
+            manager = get_share_manager()
+            manager.add_share(shared_password)
+
+            # Build URL
+            base_url = str(request.base_url).rstrip('/')
+            share_url = f"{base_url}/s/{share_id}"
+
+            return {
+                "success": True,
+                "share_id": share_id,
+                "share_url": share_url,
+                "expires_at": expires_at.isoformat(),
+                "access_type": data.access_type.value,
+                "max_views": shared_password.max_views,
+                "duration": data.duration.value,
+                "message": f"Share created successfully. Valid for {data.duration.value}"
+            }
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"Failed to create share: {str(e)}")
+
+
+    @app.get("/api/share/{share_id}")
+    async def get_share_info(share_id: str, request: Request):
+        """Get information about a share (without the password)"""
+        try:
+            manager = get_share_manager()
+            share = manager.get_share(share_id)
+
+            if not share:
+                raise HTTPException(404, "Share not found or expired")
+
+            if not share.can_access():
+                raise HTTPException(410, "Share has expired or reached maximum views")
+
+            return {
+                "exists": True,
+                "key_name": share.key_name,
+                "created_at": share.created_at.isoformat(),
+                "expires_at": share.expires_at.isoformat(),
+                "access_type": share.access_type.value,
+                "requires_password": share.access_type.value == "password",
+                "view_count": share.view_count,
+                "max_views": share.max_views,
+                "time_remaining": str(share.expires_at - datetime.now())
+            }
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, str(e))
+
+
+    @app.post("/api/share/{share_id}/access")
+    async def access_share(
+        share_id: str,
+        data: ShareAccess,
+        request: Request
+    ):
+        """Access a shared password"""
+        try:
+            manager = get_share_manager()
+            share = manager.get_share(share_id)
+
+            if not share:
+                raise HTTPException(404, "Share not found or expired")
+
+            if not share.can_access():
+                # Auto-delete if expired or max views reached
+                manager.remove_share(share_id)
+                raise HTTPException(410, "Share has expired or reached maximum views")
+
+            # Verify access password if required
+            if share.access_type == ShareAccessType.PASSWORD:
+                if not data.access_password:
+                    raise HTTPException(401, "Access password required")
+
+                if not share.verify_access_password(data.access_password):
+                    raise HTTPException(401, "Incorrect access password")
+
+            # Record access
+            client_ip = get_client_ip(request)
+            user_agent = request.headers.get("User-Agent", "Unknown")
+            share.record_access(client_ip, user_agent)
+
+            # Get the password
+            password = share.password
+
+            # Auto-delete if "once" type or max views reached
+            if share.access_type == ShareAccessType.ONCE or (share.max_views and share.view_count >= share.max_views):
+                manager.remove_share(share_id)
+
+            return {
+                "success": True,
+                "password": password,
+                "key_name": share.key_name,
+                "view_count": share.view_count,
+                "remaining_views": share.max_views - share.view_count if share.max_views else None,
+                "expires_at": share.expires_at.isoformat(),
+                "message": "Password retrieved successfully"
+            }
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, str(e))
+
+
+    @app.delete("/api/share/{share_id}")
+    async def delete_share(share_id: str, token: str = Depends(verify_token)):
+        """Delete a share (creator only)"""
+        try:
+            manager = get_share_manager()
+            success = manager.remove_share(share_id)
+
+            if not success:
+                raise HTTPException(404, "Share not found")
+
+            return {
+                "success": True,
+                "message": "Share deleted successfully"
+            }
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, str(e))
+
+
+    @app.get("/api/shares")
+    async def list_shares(token: str = Depends(verify_token)):
+        """List all active shares (authenticated users only)"""
+        try:
+            manager = get_share_manager()
+            shares = manager.list_active_shares()
+
+            return {
+                "shares": shares,
+                "count": len(shares)
+            }
+
+        except Exception as e:
+            raise HTTPException(500, str(e))
+
+
+    @app.get("/api/shares/stats")
+    async def get_share_stats(token: str = Depends(verify_token)):
+        """Get sharing statistics"""
+        try:
+            manager = get_share_manager()
+            stats = manager.get_stats()
+
+            return stats
+
+        except Exception as e:
+            raise HTTPException(500, str(e))
+
+
+    # ============= Share Access Page (Public) =============
+
+    @app.get("/s/{share_id}", response_class=HTMLResponse)
+    async def share_access_page(share_id: str, request: Request):
+        """Public share access page"""
+        try:
+            manager = get_share_manager()
+            share = manager.get_share(share_id)
+
+            if not share or not share.can_access():
+                return HTMLResponse("""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Share Not Found - kcpwd</title>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <style>
+                        body {
+                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                            display: flex;
+                            justify-content: center;
+                            align-items: center;
+                            min-height: 100vh;
+                            margin: 0;
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        }
+                        .container {
+                            background: white;
+                            padding: 50px;
+                            border-radius: 12px;
+                            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+                            max-width: 500px;
+                            text-align: center;
+                        }
+                        h1 { color: #ef4444; margin-bottom: 20px; }
+                        p { color: #666; line-height: 1.6; }
+                        .icon { font-size: 4rem; margin-bottom: 20px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="icon">⚠️</div>
+                        <h1>Share Not Found</h1>
+                        <p>This share link has expired, been deleted, or never existed.</p>
+                        <p>Shares are temporary and automatically expire after a set duration.</p>
+                    </div>
+                </body>
+                </html>
+                """)
+
+            # Build the access page
+            requires_password = share.access_type == ShareAccessType.PASSWORD
+            time_remaining = str(share.expires_at - datetime.now()).split('.')[0]
+
+            return HTMLResponse(f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Access Shared Password - kcpwd</title>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                    * {{
+                        margin: 0;
+                        padding: 0;
+                        box-sizing: border-box;
+                    }}
+                    body {{
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        min-height: 100vh;
+                        margin: 0;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        padding: 20px;
+                    }}
+                    .container {{
+                        background: white;
+                        padding: 40px;
+                        border-radius: 12px;
+                        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+                        max-width: 500px;
+                        width: 100%;
+                    }}
+                    h1 {{
+                        color: #667eea;
+                        margin-bottom: 10px;
+                        font-size: 2rem;
+                    }}
+                    .subtitle {{
+                        color: #999;
+                        margin-bottom: 30px;
+                        font-size: 0.9rem;
+                    }}
+                    .info {{
+                        background: #f9fafb;
+                        padding: 15px;
+                        border-radius: 8px;
+                        margin-bottom: 20px;
+                        border-left: 4px solid #667eea;
+                    }}
+                    .info-row {{
+                        display: flex;
+                        justify-content: space-between;
+                        margin: 8px 0;
+                        font-size: 0.9rem;
+                    }}
+                    .info-label {{
+                        color: #666;
+                        font-weight: 600;
+                    }}
+                    .info-value {{
+                        color: #333;
+                    }}
+                    .warning {{
+                        background: #fff3cd;
+                        border-left: 4px solid #ffc107;
+                        padding: 15px;
+                        margin-bottom: 20px;
+                        border-radius: 4px;
+                    }}
+                    .warning-title {{
+                        font-weight: 600;
+                        color: #856404;
+                        margin-bottom: 5px;
+                    }}
+                    .warning-text {{
+                        color: #856404;
+                        font-size: 0.9rem;
+                    }}
+                    input {{
+                        width: 100%;
+                        padding: 12px 16px;
+                        margin: 10px 0;
+                        border: 2px solid #e5e7eb;
+                        border-radius: 6px;
+                        font-size: 14px;
+                        transition: all 0.3s;
+                    }}
+                    input:focus {{
+                        outline: none;
+                        border-color: #667eea;
+                        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+                    }}
+                    button {{
+                        width: 100%;
+                        padding: 12px 24px;
+                        background: #667eea;
+                        color: white;
+                        border: none;
+                        border-radius: 6px;
+                        font-size: 14px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.3s;
+                        margin-top: 10px;
+                    }}
+                    button:hover {{
+                        background: #5568d3;
+                        transform: translateY(-2px);
+                        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+                    }}
+                    button:disabled {{
+                        opacity: 0.5;
+                        cursor: not-allowed;
+                        transform: none;
+                    }}
+                    #result {{
+                        margin-top: 20px;
+                        padding: 15px;
+                        border-radius: 8px;
+                        display: none;
+                    }}
+                    #result.success {{
+                        background: #d1fae5;
+                        border: 1px solid #10b981;
+                        color: #065f46;
+                    }}
+                    #result.error {{
+                        background: #fee;
+                        border: 1px solid #ef4444;
+                        color: #991b1b;
+                    }}
+                    .password-display {{
+                        background: #f9fafb;
+                        padding: 15px;
+                        border-radius: 6px;
+                        margin: 15px 0;
+                        font-family: monospace;
+                        font-size: 1.1rem;
+                        font-weight: bold;
+                        word-break: break-all;
+                        border: 2px solid #10b981;
+                    }}
+                    .copy-btn {{
+                        background: #10b981;
+                        margin-top: 10px;
+                    }}
+                    .copy-btn:hover {{
+                        background: #059669;
+                    }}
+                    .hidden {{ display: none; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>🔐 Shared Password</h1>
+                    <p class="subtitle">Secure temporary password sharing via kcpwd</p>
+                    
+                    <div class="info">
+                        <div class="info-row">
+                            <span class="info-label">Password Key:</span>
+                            <span class="info-value">{share.key_name}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Expires in:</span>
+                            <span class="info-value">{time_remaining}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Views:</span>
+                            <span class="info-value">{share.view_count}/{share.max_views if share.max_views else '∞'}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="warning">
+                        <div class="warning-title">⚠️ Important</div>
+                        <div class="warning-text">
+                            This is a temporary share link. The password will be shown only once
+                            {' and then deleted' if share.access_type == ShareAccessType.ONCE else ''}.
+                            Make sure to save it securely.
+                        </div>
+                    </div>
+                    
+                    <div id="access-form">
+                        {f'''
+                        <input 
+                            type="password" 
+                            id="access-password" 
+                            placeholder="Enter access password"
+                            onkeypress="if(event.key==='Enter') accessShare()"
+                        >
+                        ''' if requires_password else ''}
+                        
+                        <button onclick="accessShare()" id="access-btn">
+                            🔓 Reveal Password
+                        </button>
+                    </div>
+                    
+                    <div id="result"></div>
+                </div>
+                
+                <script>
+                    async function accessShare() {{
+                        const btn = document.getElementById('access-btn');
+                        const result = document.getElementById('result');
+                        const accessForm = document.getElementById('access-form');
+                        
+                        btn.disabled = true;
+                        btn.textContent = 'Loading...';
+                        
+                        try {{
+                            const body = {{}};
+                            {'const accessPassword = document.getElementById("access-password").value; body.access_password = accessPassword;' if requires_password else ''}
+                            
+                            const response = await fetch('/api/share/{share_id}/access', {{
+                                method: 'POST',
+                                headers: {{ 'Content-Type': 'application/json' }},
+                                body: JSON.stringify(body)
+                            }});
+                            
+                            const data = await response.json();
+                            
+                            if (!response.ok) {{
+                                throw new Error(data.detail || 'Failed to access share');
+                            }}
+                            
+                            // Hide form
+                            accessForm.style.display = 'none';
+                            
+                            // Show password
+                            result.className = 'success';
+                            result.style.display = 'block';
+                            result.innerHTML = `
+                                <div style="text-align: center;">
+                                    <h3 style="color: #065f46; margin-bottom: 15px;">✓ Password Retrieved</h3>
+                                    <div class="password-display" id="password-text">${{data.password}}</div>
+                                    <button class="copy-btn" onclick="copyPassword()">
+                                        📋 Copy to Clipboard
+                                    </button>
+                                    ${{data.remaining_views !== null ? 
+                                        `<p style="margin-top: 15px; color: #666;">Remaining views: ${{data.remaining_views}}</p>` : ''}}
+                                    ${{data.view_count === 1 && '{share.access_type.value}' === 'once' ?
+                                        '<p style="margin-top: 15px; color: #ef4444; font-weight: 600;">⚠️ This share link has been consumed and is no longer valid.</p>' : ''}}
+                                </div>
+                            `;
+                            
+                        }} catch (error) {{
+                            result.className = 'error';
+                            result.style.display = 'block';
+                            result.innerHTML = `
+                                <strong>❌ Error:</strong><br>
+                                ${{error.message}}
+                            `;
+                            btn.disabled = false;
+                            btn.textContent = '🔓 Try Again';
+                        }}
+                    }}
+                    
+                    function copyPassword() {{
+                        const passwordText = document.getElementById('password-text').textContent;
+                        navigator.clipboard.writeText(passwordText).then(() => {{
+                            alert('✓ Password copied to clipboard!');
+                        }});
+                    }}
+                </script>
+            </body>
+            </html>
+            """)
+
+        except Exception as e:
+            return HTMLResponse(f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Error - kcpwd</title>
+                <style>
+                    body {{
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        min-height: 100vh;
+                        margin: 0;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    }}
+                    .container {{
+                        background: white;
+                        padding: 50px;
+                        border-radius: 12px;
+                        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+                        max-width: 500px;
+                        text-align: center;
+                    }}
+                    h1 {{ color: #ef4444; }}
+                    .error {{ color: #666; margin-top: 20px; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>⚠️ Error</h1>
+                    <p class="error">{str(e)}</p>
+                </div>
+            </body>
+            </html>
+            """)
+
+
 # ============= Server Start =============
 
 def start_server(
@@ -661,6 +1264,11 @@ def start_server(
     print(f"🔐 Backend: {get_backend_info()['description']}")
     print(f"🔑 UI Secret: {_ui_secret}")
 
+    if SHARING_ENABLED:
+        print(f"🔗 Sharing: ENABLED")
+    else:
+        print(f"⚠️  Sharing: DISABLED (module not found)")
+
     if not secret and not UIConfig.SECRET:
         print("\n⚠️  Using temporary secret (will change on restart)")
         print("   Set KCPWD_UI_SECRET env var for persistent secret")
@@ -668,6 +1276,8 @@ def start_server(
     print("\n💡 Tips:")
     print("   • Keep your UI secret safe")
     print(f"   • Access from: http://{host}:{port}")
+    if SHARING_ENABLED:
+        print(f"   • Share passwords via: http://{host}:{port}/s/{{share_id}}")
     print("   • Press Ctrl+C to stop")
     print("=" * 60 + "\n")
 
