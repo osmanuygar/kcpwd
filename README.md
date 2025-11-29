@@ -1,4 +1,3 @@
-
 <p align="left">
   <img src="kcpwd/ui/static/kcpwd_logo.png" alt="kcpwd Logo" width="200"/>
 </p>
@@ -8,11 +7,12 @@
 [![License](https://img.shields.io/pypi/l/kcpwd.svg)]  
 # kcpwd
 
-**Cross-platform Keychain Password Manager CLI, Library & Web UI** - A powerful password manager for **macOS and Linux** with native system keyring support and modern web interface.
+**Cross-platform Keychain Password Manager CLI, Library & Web UI** - A powerful password manager for **macOS and Linux** with native system keyring support, modern web interface, and **temporary password sharing**.
 
 ## ✨ Features
 
--  **🌐 NEW: Modern Web UI** - Beautiful web interface with FastAPI backend
+-  **🌐 Modern Web UI** - Beautiful, professional dark mode interface with FastAPI backend
+-  **🔗 NEW: Password Sharing** - Pastebin-style temporary share links (5m-3h)
 -  **Cross-platform**: Supports macOS and Linux
 -  **Automatic Backend Selection**: System keyring or encrypted file fallback
 -  **Works Everywhere**: Docker, CI/CD, headless servers - no dependencies!
@@ -21,6 +21,7 @@
 -  Automatic clipboard copying (macOS) / optional on Linux
 -  Cryptographically secure password generation
 -  **Password Strength Checker** - Analyze password strength with detailed feedback
+-  **Professional Dark Theme** - Corporate-grade dark mode UI
 -  Import/Export functionality for backups
 -  Simple CLI interface
 -  Python library for programmatic access
@@ -29,6 +30,23 @@
 -  Native OS integration when available
 
 
+**Example:**
+```python
+# API usage
+import requests
+
+response = requests.post("http://localhost:8765/api/share/create",
+    headers={"Authorization": f"Bearer {token}"},
+    json={
+        "key": "github_token",
+        "duration": "1h",
+        "access_type": "once"
+    })
+
+share_url = response.json()["share_url"]
+# http://localhost:8765/s/Xy9kL2mN4pQ6rS8t
+```
+
 ## Platform Support
 
 ### macOS
@@ -36,6 +54,7 @@
 - ✅ Automatic clipboard copying with `pbcopy`
 - ✅ Full feature support
 - ✅ Web UI support
+- ✅ Password sharing
 
 ### Linux
 - ✅ **Works immediately - no setup required!**
@@ -44,6 +63,7 @@
 - ✅ Optional clipboard support via `xclip`, `xsel`, or `wl-copy` (auto-detected)
 - ✅ Perfect for Docker, CI/CD, headless servers
 - ✅ Web UI support
+- ✅ Password sharing
 - 📦 Zero required dependencies (secretstorage optional for system keyring)
 
 ## Installation
@@ -53,7 +73,7 @@
 pip install kcpwd
 ```
 
-### With Web UI
+### With Web UI (Recommended)
 ```bash
 pip install 'kcpwd[ui]'
 ```
@@ -146,9 +166,54 @@ Then open your browser to `http://localhost:8765` and enter the UI secret shown 
 - 🔍 Search passwords instantly
 - ➕ Add new passwords with strength checking
 - 🎲 Generate secure passwords with custom rules
+- 🔗 **Share passwords temporarily** (NEW!)
 - 📤 Export/Import for backups
 - 🔒 Master password support
 - 📊 Real-time statistics
+- 🎨 Professional dark mode theme
+
+### 🔗 Password Sharing Usage
+
+**Via Web UI:**
+1. Navigate to Share tab
+2. Select password to share
+3. Configure:
+   - Duration (5m - 3h)
+   - Access type (anyone/once/password)
+   - Optional: Max views, access password
+4. Copy and share the link
+
+**Via API:**
+```python
+import requests
+
+# Authenticate
+auth = requests.post("http://localhost:8765/api/auth",
+    json={"secret": "your-ui-secret"})
+token = auth.json()["token"]
+
+# Create share
+share = requests.post("http://localhost:8765/api/share/create",
+    headers={"Authorization": f"Bearer {token}"},
+    json={
+        "key": "my_password",
+        "duration": "30m",
+        "access_type": "once",
+        "max_views": 1
+    })
+
+print(share.json()["share_url"])
+# Output: http://localhost:8765/s/AbC123XyZ
+```
+
+**Access share (no auth needed):**
+```bash
+# Browser
+http://localhost:8765/s/AbC123XyZ
+
+# API
+curl http://localhost:8765/s/AbC123XyZ/access
+```
 
 ## Usage
 
@@ -353,8 +418,29 @@ response = requests.post("http://localhost:8765/api/generate",
     headers=headers,
     json={"length": 20, "use_symbols": True})
 new_password = response.json()["password"]
-```
 
+# Create share link (NEW!)
+response = requests.post("http://localhost:8765/api/share/create",
+    headers=headers,
+    json={
+        "key": "my_password",
+        "duration": "1h",
+        "access_type": "once"
+    })
+share_url = response.json()["share_url"]
+```
+### 🔗 Password Sharing (NEW in v0.6.4!)
+
+Create temporary, secure links to share passwords:
+
+```bash
+# Via Web UI
+1. Go to Share tab
+2. Select password
+3. Choose duration (5m, 15m, 30m, 1h, 3h)
+4. Select access type (anyone/once/password)
+5. Click "Create Share Link"
+```
 ## Security Details
 
 - **Encryption**: AES-256-GCM (authenticated encryption)
@@ -366,6 +452,12 @@ new_password = response.json()["password"]
 - **Master Password**: Not stored anywhere (must be remembered)
 - **Web UI**: Session-based authentication with secure tokens
 - **API**: Bearer token authentication
+- **Password Sharing**:
+  - 128-bit random share IDs
+  - Short-lived by design (max 3 hours)
+  - Auto-expiration with background cleanup
+  - Optional password protection
+  - Access logging (IP, timestamp, user agent)
 
 ## Platform-Specific Notes
 
@@ -474,6 +566,18 @@ WantedBy=multi-user.target
 - Sessions expire after 1 hour by default
 - Just re-authenticate with your UI secret
 
+### Password Sharing Issues
+
+**"Share link not working"**
+- Check if sharing is enabled: look for "🔗 Sharing: ENABLED" in server logs
+- Verify link hasn't expired
+- Check if max views reached (for limited shares)
+
+**"Cannot create share"**
+- Ensure you're authenticated
+- Check password exists
+- Verify duration and access type are valid
+
 ### Linux Issues
 
 **"No secret service available"**
@@ -499,24 +603,27 @@ WantedBy=multi-user.target
 
 ## Changelog
 
-### v0.6.4 - Password Sharing
--  NEW: Pastebin-style temporary password sharing
--  Time-based expiration (5m - 3h)
--  Multiple security options (anyone/once/password)
+### v0.6.4 (Current) - Password Sharing & Professional Dark Mode
+-  **NEW: Password Sharing** - Pastebin-style temporary share links
+-  **NEW: Professional Dark Theme** - Corporate-grade dark mode UI
+-  Temporary share links (5m, 15m, 30m, 1h, 3h)
+-  Three access modes: anyone, one-time, password-protected
+-  Beautiful share access pages with QR codes
+-  Auto-expiration with background cleanup
 -  Access logging and statistics
--  Beautiful share access pages
--  Automatic cleanup
+-  Share management tab in Web UI
+-  REST API for password sharing
+-  Zero new dependencies
 
-### v0.6.3 (Current) - Web UI & Enhanced Features
--  Modern Web UI** with FastAPI backend
--  Beautiful, responsive interface** for password management
--  Real-time password strength visualization**
--  Interactive password generator** with live preview
--  Import/Export via Web UI**
--  Session-based authentication**
+### v0.6.3 - Web UI & Enhanced Features
+-  Modern Web UI with FastAPI backend
+-  Beautiful, responsive interface for password management
+-  Real-time password strength visualization
+-  Interactive password generator with live preview
+-  Import/Export via Web UI
+-  Session-based authentication
 -  Enhanced UI with logo
--  **REST API** for programmatic access
--  Enhanced CLI with `kcpwd ui` command
+-  REST API for programmatic access
 -  Improved documentation and examples
 -  Better error handling and user feedback
 
@@ -558,7 +665,7 @@ MIT License - See LICENSE file for details
 
 ## Contributing
 
-Contributions welcome! Platform-specific improvements and Web UI enhancements especially appreciated.
+Contributions welcome! Platform-specific improvements, Web UI enhancements, and password sharing features especially appreciated.
 
 ### Development Setup
 
@@ -588,17 +695,51 @@ mypy kcpwd/
 - [x] Password strength checker
 - [x] Master password protection
 - [x] Web UI with FastAPI
+- [x] Password sharing (temporary links)
+- [x] Professional dark mode
 - [ ] Windows support (Windows Credential Locker)
 - [ ] Password history tracking
 - [ ] Browser extensions
 - [ ] Multi-user support
 - [ ] Cloud sync options
 - [ ] 2FA/OTP support
-- [ ] Password sharing (encrypted)
+- [ ] QR code generation for shares
+- [ ] Email notifications on share access
 - [ ] Mobile apps
 - [ ] Multi node sync
 - [ ] Advanced reporting and analytics
 
+
+
+### Password Sharing Scenarios
+
+1. **Emergency Production Access**
+   ```bash
+   # Create 15-minute one-time link for on-call engineer
+   kcpwd ui
+   # Share tab → prod_db → 15m → once → Create
+   ```
+
+2. **Client API Key Handoff**
+   ```bash
+   # Password-protected 3-hour share
+   kcpwd ui
+   # Share tab → client_api_key → 3h → password → Create
+   ```
+
+3. **Team Onboarding**
+   ```bash
+   # 1-hour link for initial credentials
+   kcpwd ui
+   # Share tab → staging_creds → 1h → anyone → Create
+   ```
+
+4. **Support Password Reset**
+   ```bash
+   # 30-minute temporary password
+   kcpwd ui
+   # Share tab → temp_reset → 30m → once → Create
+   ```
 
 ## Screenshots
 
@@ -617,12 +758,14 @@ Status: ✓ Active (OS-native secure storage)
 ```
 
 ### Web UI
-Beautiful, modern interface for managing your passwords:
-- Dark theme
-- Responsive design
-- Real-time password strength
-- Interactive password generator
-- Secure session management
+Beautiful, professional dark mode interface:
+- 🎨 Corporate-grade dark theme
+- 📱 Responsive design
+- 💪 Real-time password strength
+- 🎲 Interactive password generator
+- 🔗 Password sharing with beautiful access pages
+- 🔒 Secure session management
+- 📊 Statistics and monitoring
 
 ## Support
 
