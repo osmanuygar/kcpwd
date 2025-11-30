@@ -1,6 +1,6 @@
 """
 kcpwd.master_protection - UNIVERSAL master password protection
-Works with ALL backends: macOS Keychain, Linux SecretService, AND File Backend
+Works with ALL backends: macOS Keychain, Linux SecretService, Windows Credential Locker, AND File Backend
 
 IMPORTANT: This is SEPARATE from file storage encryption
 """
@@ -88,6 +88,7 @@ def set_master_password(key: str, password: str, master_password: str) -> bool:
     """Store password with master protection
 
     Works with ALL backends (keyring or file)
+    Supports macOS, Linux, and Windows
     """
     try:
         encrypted_data = _encrypt_password(password, master_password)
@@ -109,6 +110,7 @@ def get_master_password(key: str, master_password: str) -> Optional[str]:
     """Retrieve master-protected password
 
     Works with ALL backends (keyring or file)
+    Supports macOS, Linux, and Windows
     """
     try:
         backend_type, backend = _get_storage_backend()
@@ -131,6 +133,7 @@ def has_master_password(key: str) -> bool:
     """Check if key has master protection
 
     Works with ALL backends (keyring or file)
+    Supports macOS, Linux, and Windows
     """
     try:
         backend_type, backend = _get_storage_backend()
@@ -150,6 +153,7 @@ def delete_master_password(key: str) -> bool:
     """Delete master-protected password
 
     Works with ALL backends (keyring or file)
+    Supports macOS, Linux, and Windows
     """
     try:
         backend_type, backend = _get_storage_backend()
@@ -172,6 +176,7 @@ def list_master_keys() -> List[str]:
     """List all master-protected keys
 
     Works with ALL backends (keyring or file)
+    Supports macOS, Linux, and Windows
     """
     backend_type, backend = _get_storage_backend()
 
@@ -184,6 +189,8 @@ def list_master_keys() -> List[str]:
             return _list_master_keys_macos()
         elif current_platform == 'linux':
             return _list_master_keys_linux()
+        elif current_platform == 'windows':
+            return _list_master_keys_windows()
         else:
             return []
     else:
@@ -259,6 +266,53 @@ def _list_master_keys_linux() -> List[str]:
             return []
     except Exception:
         # SecretStorage failed, try file backend
+        try:
+            from .core import _get_backend
+            backend = _get_backend()
+            return backend.list_keys(MASTER_SERVICE_NAME)
+        except:
+            return []
+
+
+def _list_master_keys_windows() -> List[str]:
+    """List master keys on Windows
+
+    Uses cmdkey to list credentials from Windows Credential Manager
+    """
+    import subprocess
+    import re
+
+    keys = []
+
+    try:
+        # Use cmdkey to list Windows credentials
+        result = subprocess.run(
+            ['cmdkey', '/list'],
+            capture_output=True,
+            text=True,
+            shell=True,
+            timeout=10
+        )
+
+        if result.returncode == 0:
+            output = result.stdout
+
+            # Look for kcpwd-master credentials
+            # Pattern to match master-protected entries
+            pattern = rf'Target:\s*{MASTER_SERVICE_NAME}[:_](\S+)'
+            matches = re.findall(pattern, output, re.IGNORECASE)
+
+            for match in matches:
+                key = match.strip()
+                if key and key not in keys:
+                    keys.append(key)
+
+        return sorted(keys)
+
+    except subprocess.TimeoutExpired:
+        return []
+    except Exception:
+        # If Windows-specific method fails, try file backend
         try:
             from .core import _get_backend
             backend = _get_backend()

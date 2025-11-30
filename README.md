@@ -7,21 +7,21 @@
 [![License](https://img.shields.io/pypi/l/kcpwd.svg)]  
 # kcpwd
 
-**Cross-platform Keychain Password Manager CLI, Library & Web UI** - A powerful password manager for **macOS and Linux** with native system keyring support, modern web interface, and **temporary password sharing**.
+**Cross-platform Keychain Password Manager CLI, Library & Web UI** - A powerful password manager for **macOS, Linux, and Windows** with native system keyring support and modern web interface.
 
 ## ✨ Features
 
--  **🌐 Modern Web UI** - Beautiful, professional dark mode interface with FastAPI backend
--  **🔗 NEW: Password Sharing** - Pastebin-style temporary share links (5m-3h)
--  **Cross-platform**: Supports macOS and Linux
+-  **🌐 NEW: Modern Web UI** - Beautiful web interface with FastAPI backend
+-  **🪟 NEW: Windows Support** - Native Windows Credential Locker integration
+-  **Cross-platform**: Supports macOS, Linux, and Windows
 -  **Automatic Backend Selection**: System keyring or encrypted file fallback
 -  **Works Everywhere**: Docker, CI/CD, headless servers - no dependencies!
--  Secure storage using native system keyring (macOS Keychain / Linux Secret Service)
+-  Secure storage using native system keyring (macOS Keychain / Linux Secret Service / Windows Credential Locker)
 -  **Master Password Protection** - Extra protection layer for sensitive passwords
--  Automatic clipboard copying (macOS) / optional on Linux
+-  Automatic clipboard copying on all platforms
 -  Cryptographically secure password generation
 -  **Password Strength Checker** - Analyze password strength with detailed feedback
--  **Professional Dark Theme** - Corporate-grade dark mode UI
+-  **Password Sharing** - Secure temporary password sharing with expiration
 -  Import/Export functionality for backups
 -  Simple CLI interface
 -  Python library for programmatic access
@@ -30,23 +30,6 @@
 -  Native OS integration when available
 
 
-**Example:**
-```python
-# API usage
-import requests
-
-response = requests.post("http://localhost:8765/api/share/create",
-    headers={"Authorization": f"Bearer {token}"},
-    json={
-        "key": "github_token",
-        "duration": "1h",
-        "access_type": "once"
-    })
-
-share_url = response.json()["share_url"]
-# http://localhost:8765/s/Xy9kL2mN4pQ6rS8t
-```
-
 ## Platform Support
 
 ### macOS
@@ -54,7 +37,6 @@ share_url = response.json()["share_url"]
 - ✅ Automatic clipboard copying with `pbcopy`
 - ✅ Full feature support
 - ✅ Web UI support
-- ✅ Password sharing
 
 ### Linux
 - ✅ **Works immediately - no setup required!**
@@ -63,8 +45,15 @@ share_url = response.json()["share_url"]
 - ✅ Optional clipboard support via `xclip`, `xsel`, or `wl-copy` (auto-detected)
 - ✅ Perfect for Docker, CI/CD, headless servers
 - ✅ Web UI support
-- ✅ Password sharing
 - 📦 Zero required dependencies (secretstorage optional for system keyring)
+
+### Windows
+- ✅ **Native Windows Credential Locker integration**
+- ✅ Automatic clipboard copying via `clip.exe` or `pywin32`
+- ✅ Full feature support
+- ✅ Web UI support
+- ✅ Works on Windows 10, 11, and Server editions
+- 📦 Optional `pywin32` for enhanced clipboard support
 
 ## Installation
 
@@ -73,9 +62,15 @@ share_url = response.json()["share_url"]
 pip install kcpwd
 ```
 
-### With Web UI (Recommended)
+### With Web UI
 ```bash
 pip install 'kcpwd[ui]'
+```
+
+### Windows Enhanced (Recommended)
+```bash
+pip install 'kcpwd[ui]'
+pip install pywin32  # For better clipboard support
 ```
 
 ### From Source
@@ -85,7 +80,9 @@ cd kcpwd
 pip install -e .[ui]  # Install with UI support
 ```
 
-### Linux Requirements (Optional)
+### Platform-Specific Requirements
+
+#### Linux (Optional)
 
 **kcpwd works out of the box on Linux!** For enhanced security with system keyring:
 
@@ -124,6 +121,15 @@ sudo dnf install wl-clipboard  # Fedora
 sudo pacman -S wl-clipboard   # Arch
 ```
 
+#### Windows (Optional)
+
+For enhanced clipboard support:
+```bash
+pip install pywin32
+```
+
+**Note:** Windows Credential Locker is built into Windows 10/11, no additional setup needed!
+
 ## Quick Start
 
 ### CLI Usage
@@ -135,7 +141,7 @@ kcpwd info
 # Store a password
 kcpwd set github_token ghp_xxxxxxxxxxxx
 
-# Retrieve password (clipboard on macOS, stdout on Linux)
+# Retrieve password (copies to clipboard automatically)
 kcpwd get github_token
 
 # Generate strong password
@@ -166,54 +172,10 @@ Then open your browser to `http://localhost:8765` and enter the UI secret shown 
 - 🔍 Search passwords instantly
 - ➕ Add new passwords with strength checking
 - 🎲 Generate secure passwords with custom rules
-- 🔗 **Share passwords temporarily** (NEW!)
 - 📤 Export/Import for backups
 - 🔒 Master password support
+- 🔗 Secure password sharing
 - 📊 Real-time statistics
-- 🎨 Professional dark mode theme
-
-### 🔗 Password Sharing Usage
-
-**Via Web UI:**
-1. Navigate to Share tab
-2. Select password to share
-3. Configure:
-   - Duration (5m - 3h)
-   - Access type (anyone/once/password)
-   - Optional: Max views, access password
-4. Copy and share the link
-
-**Via API:**
-```python
-import requests
-
-# Authenticate
-auth = requests.post("http://localhost:8765/api/auth",
-    json={"secret": "your-ui-secret"})
-token = auth.json()["token"]
-
-# Create share
-share = requests.post("http://localhost:8765/api/share/create",
-    headers={"Authorization": f"Bearer {token}"},
-    json={
-        "key": "my_password",
-        "duration": "30m",
-        "access_type": "once",
-        "max_views": 1
-    })
-
-print(share.json()["share_url"])
-# Output: http://localhost:8765/s/AbC123XyZ
-```
-
-**Access share (no auth needed):**
-```bash
-# Browser
-http://localhost:8765/s/AbC123XyZ
-
-# API
-curl http://localhost:8765/s/AbC123XyZ/access
-```
 
 ## Usage
 
@@ -223,16 +185,24 @@ curl http://localhost:8765/s/AbC123XyZ/access
 # Check your platform configuration
 kcpwd info
 
-# Output example (Linux):
+# Output example (Windows):
 # 🔧 Platform Information
 # ========================================
-# Platform: Linux
+# Platform: macOS
 # Supported: ✓ Yes
 # 🔐 Storage Backend
 # ========================================
 # Type: System Keyring
-# Backend: SecretService Keyring
+# Backend: Keyring
 # Status: ✓ Active (OS-native secure storage)
+#📋 Clipboard
+#========================================
+#Status: ✓ Available
+#
+#💡 macOS Notes:
+#  • Using macOS Keychain (native integration)
+#  • View passwords: Keychain Access app
+#  • Command line: security find-generic-password -s kcpwd
 ```
 
 ### CLI Commands
@@ -254,27 +224,24 @@ kcpwd set myapi weak123 --check-strength
 
 #### Retrieve a password
 
-**macOS (automatic clipboard):**
+**All platforms (automatic clipboard):**
 ```bash
 kcpwd get dbadmin
 # Output: ✓ Password for 'dbadmin' copied to clipboard
 ```
 
-**Linux (stdout - pipe to clipboard):**
+**Print to stdout (all platforms):**
 ```bash
-# Print to stdout
-kcpwd get dbadmin
+kcpwd get dbadmin --print
+```
 
-# Or pipe to clipboard (if xclip installed):
+**Linux - pipe to clipboard:**
+```bash
+# For X11 (if xclip installed):
 kcpwd get dbadmin | xclip -selection clipboard
 
 # For Wayland (wl-clipboard):
 kcpwd get dbadmin | wl-copy
-```
-
-**Both platforms - print to stdout:**
-```bash
-kcpwd get dbadmin --print
 ```
 
 #### Generate passwords
@@ -293,6 +260,15 @@ kcpwd generate --no-symbols
 
 # Generate 6-digit PIN
 kcpwd generate -l 6 --no-uppercase --no-lowercase --no-symbols
+```
+
+#### Password Sharing
+```bash
+# Share a password temporarily (Web UI feature)
+# 1. Start Web UI: kcpwd ui
+# 2. Go to "Share" tab
+# 3. Select password and duration
+# 4. Get secure link: http://localhost:8765/s/ABC123
 ```
 
 #### Web UI
@@ -335,7 +311,7 @@ delete_password("my_database")
 from kcpwd import get_platform, get_platform_name, check_platform_requirements
 
 # Get current platform
-platform = get_platform()  # 'macos' or 'linux'
+platform = get_platform()  # 'macos', 'linux', or 'windows'
 print(f"Running on: {get_platform_name()}")
 
 # Check platform requirements
@@ -418,29 +394,8 @@ response = requests.post("http://localhost:8765/api/generate",
     headers=headers,
     json={"length": 20, "use_symbols": True})
 new_password = response.json()["password"]
-
-# Create share link (NEW!)
-response = requests.post("http://localhost:8765/api/share/create",
-    headers=headers,
-    json={
-        "key": "my_password",
-        "duration": "1h",
-        "access_type": "once"
-    })
-share_url = response.json()["share_url"]
 ```
-### 🔗 Password Sharing (NEW in v0.6.4!)
 
-Create temporary, secure links to share passwords:
-
-```bash
-# Via Web UI
-1. Go to Share tab
-2. Select password
-3. Choose duration (5m, 15m, 30m, 1h, 3h)
-4. Select access type (anyone/once/password)
-5. Click "Create Share Link"
-```
 ## Security Details
 
 - **Encryption**: AES-256-GCM (authenticated encryption)
@@ -448,16 +403,11 @@ Create temporary, secure links to share passwords:
 - **Storage**: 
   - macOS: Native Keychain
   - Linux: D-Bus Secret Service (gnome-keyring, KWallet)
+  - Windows: Windows Credential Locker
   - Fallback: Encrypted file (AES-256-GCM)
 - **Master Password**: Not stored anywhere (must be remembered)
 - **Web UI**: Session-based authentication with secure tokens
 - **API**: Bearer token authentication
-- **Password Sharing**:
-  - 128-bit random share IDs
-  - Short-lived by design (max 3 hours)
-  - Auto-expiration with background cleanup
-  - Optional password protection
-  - Access logging (IP, timestamp, user agent)
 
 ## Platform-Specific Notes
 
@@ -474,6 +424,14 @@ Create temporary, secure links to share passwords:
 - Use shell pipes for clipboard: `kcpwd get key | xclip -selection clipboard`
 - Works in both X11 and Wayland (with appropriate clipboard tools)
 - Web UI works perfectly on all Linux distributions
+
+### Windows
+- Uses Windows Credential Locker (built into Windows 10/11)
+- Passwords stored securely in Windows Credential Manager
+- Access via: Control Panel → Credential Manager → Windows Credentials
+- Clipboard integration via `clip.exe` (built-in) or `pywin32` (optional, better)
+- Web UI works on all Windows versions
+- Compatible with Windows Server editions
 
 ## Web UI Configuration
 
@@ -517,7 +475,15 @@ ENV KCPWD_UI_SECRET="change-me"
 CMD ["kcpwd", "ui", "--host", "0.0.0.0"]
 ```
 
-**Systemd Service:**
+**Windows Service (NSSM):**
+```powershell
+# Download NSSM from https://nssm.cc/
+nssm install kcpwd "C:\Python311\Scripts\kcpwd.exe" "ui"
+nssm set kcpwd AppEnvironmentExtra KCPWD_UI_SECRET=your-secret
+nssm start kcpwd
+```
+
+**Systemd Service (Linux):**
 ```ini
 [Unit]
 Description=kcpwd Web UI
@@ -541,6 +507,9 @@ WantedBy=multi-user.target
 - **Linux**: 
   - D-Bus Secret Service daemon (gnome-keyring, KWallet, etc.)
   - `secretstorage>=3.3.0` (auto-installed)
+- **Windows**:
+  - Windows 10/11 or Server 2016+
+  - `pywin32` (optional, for better clipboard support)
 - `cryptography>=41.0.0` (for master password protection)
 - `click>=8.0.0` (for CLI)
 - `keyring>=23.0.0` (for keyring abstraction)
@@ -558,25 +527,15 @@ WantedBy=multi-user.target
 - Check if files exist: `ls ~/.local/lib/python*/site-packages/kcpwd/ui/static/`
 
 **"Cannot connect to UI"**
-- Check if port is available: `lsof -i :8765`
+- Check if port is available: 
+  - Linux/Mac: `lsof -i :8765`
+  - Windows: `netstat -ano | findstr :8765`
 - Try different port: `kcpwd ui --port 8000`
 - Check firewall settings
 
 **"Session expired"**
 - Sessions expire after 1 hour by default
 - Just re-authenticate with your UI secret
-
-### Password Sharing Issues
-
-**"Share link not working"**
-- Check if sharing is enabled: look for "🔗 Sharing: ENABLED" in server logs
-- Verify link hasn't expired
-- Check if max views reached (for limited shares)
-
-**"Cannot create share"**
-- Ensure you're authenticated
-- Check password exists
-- Verify duration and access type are valid
 
 ### Linux Issues
 
@@ -601,29 +560,53 @@ WantedBy=multi-user.target
 - Use Keychain Access app to verify
 - Command: `security find-generic-password -s kcpwd`
 
+### Windows Issues
+
+**"Backend not available"**
+- Windows Credential Locker is built into Windows 10/11
+- Make sure you're running Windows 10 1703 or later
+- Check: Control Panel → Credential Manager
+
+**"Clipboard not working"**
+- Install pywin32: `pip install pywin32`
+- Or use built-in clip.exe (should work automatically)
+
+**"Access denied" errors**
+- Run as Administrator if needed
+- Check Windows Credential Manager permissions
+
+**Web UI on Windows**
+- May need to allow through Windows Firewall
+- Use `kcpwd ui --host 127.0.0.1` for localhost only
+
 ## Changelog
 
-### v0.6.4 (Current) - Password Sharing & Professional Dark Mode
--  **NEW: Password Sharing** - Pastebin-style temporary share links
--  **NEW: Professional Dark Theme** - Corporate-grade dark mode UI
--  Temporary share links (5m, 15m, 30m, 1h, 3h)
--  Three access modes: anyone, one-time, password-protected
--  Beautiful share access pages with QR codes
--  Auto-expiration with background cleanup
+### v0.7.0 (NEXT) - Windows Support
+- 🪟 **Full Windows support** with Windows Credential Locker
+- ✅ Windows clipboard integration (clip.exe + pywin32)
+- ✅ Platform detection for Windows
+- ✅ All features working on Windows 10/11
+- ✅ Windows-specific documentation
+- ✅ Tested on Windows Server editions
+
+### v0.6.4 - Password Sharing
+-  NEW: Pastebin-style temporary password sharing
+-  Time-based expiration (5m - 3h)
+-  Multiple security options (anyone/once/password)
 -  Access logging and statistics
--  Share management tab in Web UI
--  REST API for password sharing
--  Zero new dependencies
+-  Beautiful share access pages
+-  Automatic cleanup
 
 ### v0.6.3 - Web UI & Enhanced Features
--  Modern Web UI with FastAPI backend
--  Beautiful, responsive interface for password management
--  Real-time password strength visualization
--  Interactive password generator with live preview
--  Import/Export via Web UI
--  Session-based authentication
+-  Modern Web UI** with FastAPI backend
+-  Beautiful, responsive interface** for password management
+-  Real-time password strength visualization**
+-  Interactive password generator** with live preview
+-  Import/Export via Web UI**
+-  Session-based authentication**
 -  Enhanced UI with logo
--  REST API for programmatic access
+-  **REST API** for programmatic access
+-  Enhanced CLI with `kcpwd ui` command
 -  Improved documentation and examples
 -  Better error handling and user feedback
 
@@ -665,7 +648,7 @@ MIT License - See LICENSE file for details
 
 ## Contributing
 
-Contributions welcome! Platform-specific improvements, Web UI enhancements, and password sharing features especially appreciated.
+Contributions welcome! Platform-specific improvements and Web UI enhancements especially appreciated.
 
 ### Development Setup
 
@@ -695,51 +678,17 @@ mypy kcpwd/
 - [x] Password strength checker
 - [x] Master password protection
 - [x] Web UI with FastAPI
-- [x] Password sharing (temporary links)
-- [x] Professional dark mode
-- [ ] Windows support (Windows Credential Locker)
+- [x] Password sharing
+- [x] Windows support
 - [ ] Password history tracking
 - [ ] Browser extensions
 - [ ] Multi-user support
 - [ ] Cloud sync options
 - [ ] 2FA/OTP support
-- [ ] QR code generation for shares
-- [ ] Email notifications on share access
 - [ ] Mobile apps
 - [ ] Multi node sync
 - [ ] Advanced reporting and analytics
 
-
-
-### Password Sharing Scenarios
-
-1. **Emergency Production Access**
-   ```bash
-   # Create 15-minute one-time link for on-call engineer
-   kcpwd ui
-   # Share tab → prod_db → 15m → once → Create
-   ```
-
-2. **Client API Key Handoff**
-   ```bash
-   # Password-protected 3-hour share
-   kcpwd ui
-   # Share tab → client_api_key → 3h → password → Create
-   ```
-
-3. **Team Onboarding**
-   ```bash
-   # 1-hour link for initial credentials
-   kcpwd ui
-   # Share tab → staging_creds → 1h → anyone → Create
-   ```
-
-4. **Support Password Reset**
-   ```bash
-   # 30-minute temporary password
-   kcpwd ui
-   # Share tab → temp_reset → 30m → once → Create
-   ```
 
 ## Screenshots
 
@@ -748,24 +697,23 @@ mypy kcpwd/
 $ kcpwd info
 🔧 Platform Information
 ========================================
-Platform: Linux
+Platform: Windows
 Supported: ✓ Yes
 🔐 Storage Backend
 ========================================
 Type: System Keyring
-Backend: SecretService Keyring
+Backend: Windows Credential Locker
 Status: ✓ Active (OS-native secure storage)
 ```
 
 ### Web UI
-Beautiful, professional dark mode interface:
-- 🎨 Corporate-grade dark theme
-- 📱 Responsive design
-- 💪 Real-time password strength
-- 🎲 Interactive password generator
-- 🔗 Password sharing with beautiful access pages
-- 🔒 Secure session management
-- 📊 Statistics and monitoring
+Beautiful, modern interface for managing your passwords:
+- Dark theme
+- Responsive design
+- Real-time password strength
+- Interactive password generator
+- Secure session management
+- Password sharing
 
 ## Support
 

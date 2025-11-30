@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 kcpwd - Cross-platform Keychain Password Manager CLI
-Supports macOS and Linux
+Supports macOS, Linux, and Windows
 Stores passwords securely in system keyring and provides clipboard integration
 """
 
@@ -32,15 +32,15 @@ from .platform_utils import (
 
 
 @click.group()
-@click.version_option(version='0.6.4')
+@click.version_option(version='0.7.0')
 def cli():
-    """kcpwd - Cross-platform Password Manager (macOS & Linux)"""
+    """kcpwd - Cross-platform Password Manager (macOS, Linux & Windows)"""
     # Check platform support
     if not is_platform_supported():
         platform_name = get_platform_name()
         click.echo(click.style(f"⚠️  Warning: {platform_name} is not officially supported",
                                fg='yellow'), err=True)
-        click.echo("Supported platforms: macOS, Linux\n", err=True)
+        click.echo("Supported platforms: macOS, Linux, Windows\n", err=True)
 
 
 @cli.command()
@@ -81,8 +81,10 @@ def info():
         for warning in status['warnings']:
             click.echo(f"  • {warning}")
 
-    # Linux-specific notes
-    if status['platform'] == 'linux':
+    # Platform-specific notes
+    current_platform = status['platform']
+
+    if current_platform == 'linux':
         click.echo(f"\n💡 Linux Notes:")
         if status['clipboard_available']:
             tool = status.get('clipboard_tool', 'clipboard tool')
@@ -97,6 +99,29 @@ def info():
         else:
             click.echo(f"  • Using encrypted file backend (no system keyring detected)")
             click.echo(f"  • Storage: ~/.kcpwd/keyring.enc")
+
+    elif current_platform == 'windows':
+        click.echo(f"\n💡 Windows Notes:")
+        if status['clipboard_available']:
+            tool = status.get('clipboard_tool', 'clipboard tool')
+            click.echo(f"  • Clipboard available via {tool}")
+            if tool == 'clip.exe':
+                click.echo(f"  • For better clipboard support, install: pip install pywin32")
+        else:
+            click.echo(f"  • Install pywin32 for clipboard support: pip install pywin32")
+
+        if backend['type'] == 'keyring':
+            click.echo(f"  • Using Windows Credential Locker (Windows Credential Manager)")
+            click.echo(f"  • View passwords: Control Panel → Credential Manager → Windows Credentials")
+        else:
+            click.echo(f"  • Using encrypted file backend (keyring not available)")
+            click.echo(f"  • Storage: %USERPROFILE%\\.kcpwd\\keyring.enc")
+
+    elif current_platform == 'macos':
+        click.echo(f"\n💡 macOS Notes:")
+        click.echo(f"  • Using macOS Keychain (native integration)")
+        click.echo(f"  • View passwords: Keychain Access app")
+        click.echo(f"  • Command line: security find-generic-password -s kcpwd")
 
     click.echo()
 
@@ -190,7 +215,7 @@ def set_master(key: str, password: str):
 @click.option('--print', '-p', 'print_password', is_flag=True,
               help='Print password to stdout instead of clipboard')
 def get(key: str, master_password: bool = False, print_password: bool = False):
-    """Retrieve password and copy to clipboard (macOS) or print (Linux)
+    """Retrieve password and copy to clipboard (or print)
 
     Examples:
         kcpwd get dbadmin
@@ -211,18 +236,22 @@ def get(key: str, master_password: bool = False, print_password: bool = False):
         # Handle output based on platform and user preference
         if print_password:
             click.echo(password)
-        elif current_platform == 'linux':
-            # On Linux, always print (clipboard disabled)
-            click.echo(password)
-        else:
-            # Try clipboard on macOS
+        elif current_platform in ['macos', 'windows']:
+            # Try clipboard on macOS and Windows
             from .core import copy_to_clipboard
             if copy_to_clipboard(password):
                 click.echo(f"✓ Password for '{key}' copied to clipboard")
             else:
+                # Clipboard failed, print instead
                 click.echo(f"✓ Password: {password}")
+        else:
+            # Linux - print by default
+            click.echo(password)
     else:
-        password = _get_password(key, copy_to_clip=(not print_password and current_platform == 'macos'))
+        # Determine if we should copy to clipboard
+        should_copy = not print_password and current_platform in ['macos', 'windows']
+
+        password = _get_password(key, copy_to_clip=should_copy)
 
         if password is None:
             click.echo(f"No password found for '{key}'", err=True)
@@ -231,10 +260,11 @@ def get(key: str, master_password: bool = False, print_password: bool = False):
         # Handle output based on platform and user preference
         if print_password:
             click.echo(password)
-        elif current_platform == 'linux':
-            click.echo(password)
-        else:
+        elif current_platform in ['macos', 'windows']:
             click.echo(f"✓ Password for '{key}' copied to clipboard")
+        else:
+            # Linux - print to stdout
+            click.echo(password)
 
 
 @cli.command()
@@ -250,14 +280,15 @@ def get_master(key: str):
 
     current_platform = get_platform()
 
-    if current_platform == 'linux':
-        click.echo(password)
-    else:
+    if current_platform in ['macos', 'windows']:
         from .core import copy_to_clipboard
         if copy_to_clipboard(password):
             click.echo(f"✓ Password for '{key}' copied to clipboard")
         else:
             click.echo(f"✓ Password: {password}")
+    else:
+        # Linux - print to stdout
+        click.echo(password)
 
 
 @cli.command()
@@ -345,7 +376,7 @@ def generate(length, no_uppercase, no_lowercase, no_digits, no_symbols, exclude_
 
         # Handle clipboard based on platform
         current_platform = get_platform()
-        should_copy = copy if copy is not None else (current_platform == 'macos')
+        should_copy = copy if copy is not None else (current_platform in ['macos', 'windows'])
 
         if should_copy:
             from .core import copy_to_clipboard
@@ -488,6 +519,12 @@ def ui(host, port, secret, no_open_browser):
         kcpwd ui
         kcpwd ui --port 8000
         kcpwd ui --host 0.0.0.0 --port 8080
+
+        # Windows
+        set KCPWD_UI_SECRET=mysecret
+        kcpwd ui
+
+        # Linux/macOS
         KCPWD_UI_SECRET=mysecret kcpwd ui
     """
     try:
@@ -507,6 +544,7 @@ def ui(host, port, secret, no_open_browser):
         click.echo(f"\nError details: {e}")
     except Exception as e:
         click.echo(click.style(f"❌ Failed to start UI: {e}", fg='red'), err=True)
+
 
 if __name__ == '__main__':
     cli()

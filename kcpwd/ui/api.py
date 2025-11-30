@@ -91,7 +91,7 @@ def verify_session(token: str) -> bool:
 app = FastAPI(
     title="kcpwd Web UI",
     description="Password Manager Web Interface with Sharing",
-    version="0.6.4",
+    version="0.7.0",
     docs_url="/api/docs" if UIConfig.DEBUG else None,
     redoc_url="/api/redoc" if UIConfig.DEBUG else None,
 )
@@ -267,7 +267,7 @@ async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "version": "0.6.4",
+        "version": "0.7.0",
         "sharing_enabled": SHARING_ENABLED,
         "timestamp": datetime.now().isoformat()
     }

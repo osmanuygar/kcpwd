@@ -1166,17 +1166,17 @@ window.addEventListener('unhandledrejection', (event) => {
 
 if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     console.log('%c🔐 kcpwd Web UI - Development Mode', 'color: #667eea; font-size: 14px; font-weight: bold;');
-    console.log('%cVersion: 0.6.4 (with Password Sharing)', 'color: #666;');
+    console.log('%cVersion: 0.7.0 (with Password Sharing)', 'color: #666;');
 
     window.kcpwdAPI = {
         authToken: () => authToken,
         passwords: () => allPasswords,
         platformInfo: () => window.platformInfo,
         apiCall: apiCall,
-        version: '0.6.4'
+        version: '0.7.0'
     };
 
     console.log('%cDebug API available at window.kcpwdAPI', 'color: #10b981;');
 }
 
-console.log('✓ kcpwd UI v0.6.4 loaded successfully (with Password Sharing)');
+console.log('✓ kcpwd UI v0.7.0 loaded successfully (with Password Sharing)');
