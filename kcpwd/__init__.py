@@ -1,6 +1,6 @@
 """
 kcpwd - Cross-platform Keychain Password Manager
-Supports macOS and Linux
+Supports macOS, Linux, and Windows
 Can be used as both CLI tool and Python library
 """
 
@@ -32,7 +32,7 @@ from .platform_utils import (
     check_clipboard_support
 )
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 __all__ = [
     'set_password',
     'get_password',

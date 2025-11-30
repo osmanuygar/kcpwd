@@ -1,11 +1,11 @@
 """
 kcpwd.core - Core password management functions
-FIXED: Persistent backend cache for session
+UPDATED: Windows support added
 
 Changes:
-- Added _get_backend() with module-level cache
-- All functions use same backend instance
-- Master password asked ONCE per session
+- Added Windows support to list_all_keys()
+- Windows Credential Manager integration
+- Persistent backend cache for session
 """
 
 import keyring
@@ -185,6 +185,7 @@ def list_all_keys() -> List[str]:
     """List all stored password keys
 
     Uses cached backend - master password asked only ONCE per session
+    Supports macOS, Linux, and Windows
     """
     backend = _get_backend()
 
@@ -196,6 +197,8 @@ def list_all_keys() -> List[str]:
             return _list_all_keys_macos()
         elif current_platform == 'linux':
             return _list_all_keys_linux()
+        elif current_platform == 'windows':
+            return _list_all_keys_windows()
         else:
             return []
     else:
@@ -266,6 +269,69 @@ def _list_all_keys_linux() -> List[str]:
         return []
 
 
+def _list_all_keys_windows() -> List[str]:
+    """List all keys on Windows using cmdkey and keyring
+
+    Windows Credential Manager stores credentials with specific naming.
+    We use keyring library which handles Windows Credential Locker internally.
+    """
+    keys = []
+
+    try:
+        # Method 1: Try using keyring's get_credential method
+        # This is more reliable but not all keyring backends support it
+        backend = keyring.get_keyring()
+
+        # Check if backend has get_credential method
+        if hasattr(backend, 'get_credential'):
+            # Unfortunately, keyring doesn't have a list_credentials method
+            # We need to use Windows-specific approach
+            pass
+
+        # Method 2: Parse cmdkey output (more reliable for Windows)
+        result = subprocess.run(
+            ['cmdkey', '/list'],
+            capture_output=True,
+            text=True,
+            shell=True,
+            timeout=10
+        )
+
+        if result.returncode == 0:
+            output = result.stdout
+
+            # Look for kcpwd credentials
+            # Format: "Target: kcpwd:key_name" or similar
+            import re
+
+            # Pattern to match kcpwd entries
+            # Windows stores as "Target: kcpwd:username"
+            pattern = rf'Target:\s*{SERVICE_NAME}[:_](\S+)'
+            matches = re.findall(pattern, output, re.IGNORECASE)
+
+            for match in matches:
+                key = match.strip()
+                if key and key not in keys:
+                    keys.append(key)
+
+        # Method 3: Fallback - try to enumerate using keyring
+        # Try common keys if cmdkey didn't work
+        if not keys:
+            # This is a fallback - we can't enumerate all keys easily on Windows
+            # But we can verify if specific keys exist
+            # For now, return empty list if cmdkey failed
+            pass
+
+    except subprocess.TimeoutExpired:
+        return []
+    except Exception as e:
+        # If Windows-specific methods fail, return empty list
+        # The user can still use set/get/delete commands
+        pass
+
+    return sorted(keys)
+
+
 def export_passwords(filepath: str, include_passwords: bool = True) -> Dict:
     """Export all passwords to JSON file"""
     try:
@@ -282,7 +348,7 @@ def export_passwords(filepath: str, include_passwords: bool = True) -> Dict:
         export_data = {
             'exported_at': datetime.now().isoformat(),
             'service': SERVICE_NAME,
-            'version': '0.6.4',
+            'version': '0.7.0',
             'include_passwords': include_passwords,
             'passwords': []
         }

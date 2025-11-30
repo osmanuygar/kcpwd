@@ -5,10 +5,10 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="kcpwd",
-    version="0.6.4",
+    version="0.7.0",
     author="osmanuygar",
     author_email="osmanuygar@gmail.com",
-    description="Cross-platform Password Manager with Web UI - Works everywhere! macOS Keychain, Linux Secret Service, or encrypted file storage. Zero dependencies required.",
+    description="Cross-platform Password Manager with Web UI - Works everywhere! macOS Keychain, Linux Secret Service, Windows Credential Locker, or encrypted file storage. Zero dependencies required.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/osmanuygar/kcpwd",
@@ -32,16 +32,20 @@ setup(
         "Programming Language :: Python :: 3.12",
         "Operating System :: MacOS",
         "Operating System :: POSIX :: Linux",
+        "Operating System :: Microsoft :: Windows",
+        "Operating System :: Microsoft :: Windows :: Windows 10",
+        "Operating System :: Microsoft :: Windows :: Windows 11",
         "Environment :: Console",
         "Environment :: Web Environment",
     ],
-    keywords="password manager cli keychain macos linux security decorator library import export backup master-password encryption cross-platform web-ui fastapi",
+    keywords="password manager cli keychain macos linux windows security decorator library import export backup master-password encryption cross-platform web-ui fastapi credential-locker",
     python_requires=">=3.8",
     install_requires=[
         "click>=8.0.0",
         "keyring>=23.0.0",
         "cryptography>=41.0.0",
         "secretstorage>=3.3.0; sys_platform == 'linux'",
+        "pywin32>=305; sys_platform == 'win32'",
     ],
     extras_require={
         "dev": [
@@ -73,6 +77,7 @@ setup(
             "ui/static/*.html",
             "ui/static/*.css",
             "ui/static/*.js",
+            "ui/static/*.png",
         ],
     },
     include_package_data=True,

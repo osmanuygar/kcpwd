@@ -4,4 +4,4 @@ Optional web interface for password management
 Install with: pip install kcpwd[ui]
 """
 
-__version__ = "0.6.4"
+__version__ = "0.7.0"

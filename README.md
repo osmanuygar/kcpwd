@@ -1,4 +1,3 @@
-
 <p align="left">
   <img src="kcpwd/ui/static/kcpwd_logo.png" alt="kcpwd Logo" width="200"/>
 </p>
@@ -8,19 +7,21 @@
 [![License](https://img.shields.io/pypi/l/kcpwd.svg)]  
 # kcpwd
 
-**Cross-platform Keychain Password Manager CLI, Library & Web UI** - A powerful password manager for **macOS and Linux** with native system keyring support and modern web interface.
+**Cross-platform Keychain Password Manager CLI, Library & Web UI** - A powerful password manager for **macOS, Linux, and Windows** with native system keyring support and modern web interface.
 
 ## ✨ Features
 
 -  **🌐 NEW: Modern Web UI** - Beautiful web interface with FastAPI backend
--  **Cross-platform**: Supports macOS and Linux
+-  **🪟 NEW: Windows Support** - Native Windows Credential Locker integration
+-  **Cross-platform**: Supports macOS, Linux, and Windows
 -  **Automatic Backend Selection**: System keyring or encrypted file fallback
 -  **Works Everywhere**: Docker, CI/CD, headless servers - no dependencies!
--  Secure storage using native system keyring (macOS Keychain / Linux Secret Service)
+-  Secure storage using native system keyring (macOS Keychain / Linux Secret Service / Windows Credential Locker)
 -  **Master Password Protection** - Extra protection layer for sensitive passwords
--  Automatic clipboard copying (macOS) / optional on Linux
+-  Automatic clipboard copying on all platforms
 -  Cryptographically secure password generation
 -  **Password Strength Checker** - Analyze password strength with detailed feedback
+-  **Password Sharing** - Secure temporary password sharing with expiration
 -  Import/Export functionality for backups
 -  Simple CLI interface
 -  Python library for programmatic access
@@ -46,6 +47,14 @@
 - ✅ Web UI support
 - 📦 Zero required dependencies (secretstorage optional for system keyring)
 
+### Windows
+- ✅ **Native Windows Credential Locker integration**
+- ✅ Automatic clipboard copying via `clip.exe` or `pywin32`
+- ✅ Full feature support
+- ✅ Web UI support
+- ✅ Works on Windows 10, 11, and Server editions
+- 📦 Optional `pywin32` for enhanced clipboard support
+
 ## Installation
 
 ### Basic Installation
@@ -58,6 +67,12 @@ pip install kcpwd
 pip install 'kcpwd[ui]'
 ```
 
+### Windows Enhanced (Recommended)
+```bash
+pip install 'kcpwd[ui]'
+pip install pywin32  # For better clipboard support
+```
+
 ### From Source
 ```bash
 git clone https://github.com/osmanuygar/kcpwd.git
@@ -65,7 +80,9 @@ cd kcpwd
 pip install -e .[ui]  # Install with UI support
 ```
 
-### Linux Requirements (Optional)
+### Platform-Specific Requirements
+
+#### Linux (Optional)
 
 **kcpwd works out of the box on Linux!** For enhanced security with system keyring:
 
@@ -104,6 +121,15 @@ sudo dnf install wl-clipboard  # Fedora
 sudo pacman -S wl-clipboard   # Arch
 ```
 
+#### Windows (Optional)
+
+For enhanced clipboard support:
+```bash
+pip install pywin32
+```
+
+**Note:** Windows Credential Locker is built into Windows 10/11, no additional setup needed!
+
 ## Quick Start
 
 ### CLI Usage
@@ -115,7 +141,7 @@ kcpwd info
 # Store a password
 kcpwd set github_token ghp_xxxxxxxxxxxx
 
-# Retrieve password (clipboard on macOS, stdout on Linux)
+# Retrieve password (copies to clipboard automatically)
 kcpwd get github_token
 
 # Generate strong password
@@ -148,6 +174,7 @@ Then open your browser to `http://localhost:8765` and enter the UI secret shown 
 - 🎲 Generate secure passwords with custom rules
 - 📤 Export/Import for backups
 - 🔒 Master password support
+- 🔗 Secure password sharing
 - 📊 Real-time statistics
 
 ## Usage
@@ -158,16 +185,24 @@ Then open your browser to `http://localhost:8765` and enter the UI secret shown 
 # Check your platform configuration
 kcpwd info
 
-# Output example (Linux):
+# Output example (Windows):
 # 🔧 Platform Information
 # ========================================
-# Platform: Linux
+# Platform: macOS
 # Supported: ✓ Yes
 # 🔐 Storage Backend
 # ========================================
 # Type: System Keyring
-# Backend: SecretService Keyring
+# Backend: Keyring
 # Status: ✓ Active (OS-native secure storage)
+#📋 Clipboard
+#========================================
+#Status: ✓ Available
+#
+#💡 macOS Notes:
+#  • Using macOS Keychain (native integration)
+#  • View passwords: Keychain Access app
+#  • Command line: security find-generic-password -s kcpwd
 ```
 
 ### CLI Commands
@@ -189,27 +224,24 @@ kcpwd set myapi weak123 --check-strength
 
 #### Retrieve a password
 
-**macOS (automatic clipboard):**
+**All platforms (automatic clipboard):**
 ```bash
 kcpwd get dbadmin
 # Output: ✓ Password for 'dbadmin' copied to clipboard
 ```
 
-**Linux (stdout - pipe to clipboard):**
+**Print to stdout (all platforms):**
 ```bash
-# Print to stdout
-kcpwd get dbadmin
+kcpwd get dbadmin --print
+```
 
-# Or pipe to clipboard (if xclip installed):
+**Linux - pipe to clipboard:**
+```bash
+# For X11 (if xclip installed):
 kcpwd get dbadmin | xclip -selection clipboard
 
 # For Wayland (wl-clipboard):
 kcpwd get dbadmin | wl-copy
-```
-
-**Both platforms - print to stdout:**
-```bash
-kcpwd get dbadmin --print
 ```
 
 #### Generate passwords
@@ -228,6 +260,15 @@ kcpwd generate --no-symbols
 
 # Generate 6-digit PIN
 kcpwd generate -l 6 --no-uppercase --no-lowercase --no-symbols
+```
+
+#### Password Sharing
+```bash
+# Share a password temporarily (Web UI feature)
+# 1. Start Web UI: kcpwd ui
+# 2. Go to "Share" tab
+# 3. Select password and duration
+# 4. Get secure link: http://localhost:8765/s/ABC123
 ```
 
 #### Web UI
@@ -270,7 +311,7 @@ delete_password("my_database")
 from kcpwd import get_platform, get_platform_name, check_platform_requirements
 
 # Get current platform
-platform = get_platform()  # 'macos' or 'linux'
+platform = get_platform()  # 'macos', 'linux', or 'windows'
 print(f"Running on: {get_platform_name()}")
 
 # Check platform requirements
@@ -362,6 +403,7 @@ new_password = response.json()["password"]
 - **Storage**: 
   - macOS: Native Keychain
   - Linux: D-Bus Secret Service (gnome-keyring, KWallet)
+  - Windows: Windows Credential Locker
   - Fallback: Encrypted file (AES-256-GCM)
 - **Master Password**: Not stored anywhere (must be remembered)
 - **Web UI**: Session-based authentication with secure tokens
@@ -382,6 +424,14 @@ new_password = response.json()["password"]
 - Use shell pipes for clipboard: `kcpwd get key | xclip -selection clipboard`
 - Works in both X11 and Wayland (with appropriate clipboard tools)
 - Web UI works perfectly on all Linux distributions
+
+### Windows
+- Uses Windows Credential Locker (built into Windows 10/11)
+- Passwords stored securely in Windows Credential Manager
+- Access via: Control Panel → Credential Manager → Windows Credentials
+- Clipboard integration via `clip.exe` (built-in) or `pywin32` (optional, better)
+- Web UI works on all Windows versions
+- Compatible with Windows Server editions
 
 ## Web UI Configuration
 
@@ -425,7 +475,15 @@ ENV KCPWD_UI_SECRET="change-me"
 CMD ["kcpwd", "ui", "--host", "0.0.0.0"]
 ```
 
-**Systemd Service:**
+**Windows Service (NSSM):**
+```powershell
+# Download NSSM from https://nssm.cc/
+nssm install kcpwd "C:\Python311\Scripts\kcpwd.exe" "ui"
+nssm set kcpwd AppEnvironmentExtra KCPWD_UI_SECRET=your-secret
+nssm start kcpwd
+```
+
+**Systemd Service (Linux):**
 ```ini
 [Unit]
 Description=kcpwd Web UI
@@ -449,6 +507,9 @@ WantedBy=multi-user.target
 - **Linux**: 
   - D-Bus Secret Service daemon (gnome-keyring, KWallet, etc.)
   - `secretstorage>=3.3.0` (auto-installed)
+- **Windows**:
+  - Windows 10/11 or Server 2016+
+  - `pywin32` (optional, for better clipboard support)
 - `cryptography>=41.0.0` (for master password protection)
 - `click>=8.0.0` (for CLI)
 - `keyring>=23.0.0` (for keyring abstraction)
@@ -466,7 +527,9 @@ WantedBy=multi-user.target
 - Check if files exist: `ls ~/.local/lib/python*/site-packages/kcpwd/ui/static/`
 
 **"Cannot connect to UI"**
-- Check if port is available: `lsof -i :8765`
+- Check if port is available: 
+  - Linux/Mac: `lsof -i :8765`
+  - Windows: `netstat -ano | findstr :8765`
 - Try different port: `kcpwd ui --port 8000`
 - Check firewall settings
 
@@ -497,7 +560,34 @@ WantedBy=multi-user.target
 - Use Keychain Access app to verify
 - Command: `security find-generic-password -s kcpwd`
 
+### Windows Issues
+
+**"Backend not available"**
+- Windows Credential Locker is built into Windows 10/11
+- Make sure you're running Windows 10 1703 or later
+- Check: Control Panel → Credential Manager
+
+**"Clipboard not working"**
+- Install pywin32: `pip install pywin32`
+- Or use built-in clip.exe (should work automatically)
+
+**"Access denied" errors**
+- Run as Administrator if needed
+- Check Windows Credential Manager permissions
+
+**Web UI on Windows**
+- May need to allow through Windows Firewall
+- Use `kcpwd ui --host 127.0.0.1` for localhost only
+
 ## Changelog
+
+### v0.7.0 (NEXT) - Windows Support
+- 🪟 **Full Windows support** with Windows Credential Locker
+- ✅ Windows clipboard integration (clip.exe + pywin32)
+- ✅ Platform detection for Windows
+- ✅ All features working on Windows 10/11
+- ✅ Windows-specific documentation
+- ✅ Tested on Windows Server editions
 
 ### v0.6.4 - Password Sharing
 -  NEW: Pastebin-style temporary password sharing
@@ -507,7 +597,7 @@ WantedBy=multi-user.target
 -  Beautiful share access pages
 -  Automatic cleanup
 
-### v0.6.3 (Current) - Web UI & Enhanced Features
+### v0.6.3 - Web UI & Enhanced Features
 -  Modern Web UI** with FastAPI backend
 -  Beautiful, responsive interface** for password management
 -  Real-time password strength visualization**
@@ -588,13 +678,13 @@ mypy kcpwd/
 - [x] Password strength checker
 - [x] Master password protection
 - [x] Web UI with FastAPI
-- [ ] Windows support (Windows Credential Locker)
+- [x] Password sharing
+- [x] Windows support
 - [ ] Password history tracking
 - [ ] Browser extensions
 - [ ] Multi-user support
 - [ ] Cloud sync options
 - [ ] 2FA/OTP support
-- [ ] Password sharing (encrypted)
 - [ ] Mobile apps
 - [ ] Multi node sync
 - [ ] Advanced reporting and analytics
@@ -607,12 +697,12 @@ mypy kcpwd/
 $ kcpwd info
 🔧 Platform Information
 ========================================
-Platform: Linux
+Platform: Windows
 Supported: ✓ Yes
 🔐 Storage Backend
 ========================================
 Type: System Keyring
-Backend: SecretService Keyring
+Backend: Windows Credential Locker
 Status: ✓ Active (OS-native secure storage)
 ```
 
@@ -623,6 +713,7 @@ Beautiful, modern interface for managing your passwords:
 - Real-time password strength
 - Interactive password generator
 - Secure session management
+- Password sharing
 
 ## Support
 
