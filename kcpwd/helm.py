@@ -16,7 +16,6 @@ Usage:
 
 import re
 import yaml
-import os
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 import getpass
@@ -58,9 +57,9 @@ def _get_kcpwd_password(key: str, use_master: bool = False, master_password: Opt
 
 
 def process_helm_template(
-        values_content: str,
-        master_passwords: Optional[Dict[str, str]] = None,
-        strict: bool = True
+    values_content: str,
+    master_passwords: Optional[Dict[str, str]] = None,
+    strict: bool = True
 ) -> str:
     """Process Helm values template and replace kcpwd references
 
@@ -116,11 +115,11 @@ def process_helm_template(
 
 
 def process_helm_values_file(
-        input_file: str,
-        output_file: Optional[str] = None,
-        master_passwords: Optional[Dict[str, str]] = None,
-        strict: bool = True,
-        validate_yaml: bool = True
+    input_file: str,
+    output_file: Optional[str] = None,
+    master_passwords: Optional[Dict[str, str]] = None,
+    strict: bool = True,
+    validate_yaml: bool = True
 ) -> Dict[str, Any]:
     """Process Helm values file and replace kcpwd references
 
@@ -209,13 +208,13 @@ database:
   name: myapp
   # kcpwd will fetch this password
   password: "{{ kcpwd('db_password') }}"
-
+  
 # Master-protected password with inline master password
 api:
   endpoint: https://api.example.com
   # Using master password (inline - not recommended for production)
   key: "{{ kcpwd('api_key', master='my_master_pass') }}"
-
+  
 # Master-protected password (will prompt)
 production:
   secret: "{{ kcpwd('prod_secret', master=true) }}"
@@ -224,7 +223,7 @@ production:
 redis:
   host: redis.example.com
   password: "{{ kcpwd('redis_password') }}"
-
+  
 cache:
   host: memcached.example.com
   password: "{{ kcpwd('cache_password') }}"
@@ -233,7 +232,7 @@ cache:
 jwt:
   secret: "{{ kcpwd('jwt_secret') }}"
   issuer: "myapp"
-
+  
 encryption:
   key: "{{ kcpwd('encryption_key') }}"
   algorithm: "AES256"
@@ -249,11 +248,11 @@ services:
 
 
 def sync_helm_chart_secrets(
-        chart_dir: str,
-        namespace: str = "default",
-        values_file: str = "values.yaml",
-        release_name: Optional[str] = None,
-        kubeconfig: Optional[str] = None
+    chart_dir: str,
+    namespace: str = "default",
+    values_file: str = "values.yaml",
+    release_name: Optional[str] = None,
+    kubeconfig: Optional[str] = None
 ) -> Dict[str, Any]:
     """Scan Helm chart values and sync all kcpwd refs to K8s secrets
 
@@ -353,11 +352,11 @@ usage: "Fetch secrets from kcpwd password manager"
 description: |-
   Helm plugin to integrate with kcpwd password manager.
   Automatically fetches passwords from kcpwd during helm install/upgrade.
-
+  
   Usage:
     helm kcpwd template ./chart
     helm install myapp ./chart --kcpwd-fetch
-
+    
 command: "$HELM_PLUGIN_DIR/kcpwd-helm.sh"
 hooks:
   install: "cd $HELM_PLUGIN_DIR; chmod +x kcpwd-helm.sh"
@@ -397,10 +396,10 @@ case "$COMMAND" in
     template)
         VALUES_FILE="${1:-values.yaml}"
         OUTPUT_FILE="${2:-values-processed.yaml}"
-
+        
         echo -e "${GREEN}Processing Helm values with kcpwd...${NC}"
         kcpwd helm template "$VALUES_FILE" -o "$OUTPUT_FILE"
-
+        
         if [ $? -eq 0 ]; then
             echo -e "${GREEN}✓ Values processed: $OUTPUT_FILE${NC}"
         else
@@ -408,22 +407,22 @@ case "$COMMAND" in
             exit 1
         fi
         ;;
-
+    
     sync)
         CHART_DIR="${1:-.}"
         NAMESPACE="${2:-default}"
-
+        
         echo -e "${GREEN}Syncing kcpwd passwords to K8s...${NC}"
         kcpwd helm sync "$CHART_DIR" --namespace "$NAMESPACE"
         ;;
-
+    
     scan)
         VALUES_FILE="${1:-values.yaml}"
-
+        
         echo -e "${GREEN}Scanning for kcpwd references...${NC}"
         kcpwd helm scan "$VALUES_FILE"
         ;;
-
+    
     *)
         echo "Helm kcpwd plugin"
         echo ""
@@ -484,7 +483,7 @@ helm kcpwd scan values.yaml
 ```yaml
 database:
   password: "{{ kcpwd('db_password') }}"
-
+  
 api:
   key: "{{ kcpwd('api_key', master=true) }}"
 ```
