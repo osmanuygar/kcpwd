@@ -1173,7 +1173,7 @@ if (window.location.hostname === 'localhost' || window.location.hostname === '12
         passwords: () => allPasswords,
         platformInfo: () => window.platformInfo,
         apiCall: apiCall,
-        version: '0.7.0'
+        version: '0.8.0'
     };
 
     console.log('%cDebug API available at window.kcpwdAPI', 'color: #10b981;');

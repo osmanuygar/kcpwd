@@ -1,4 +1,4 @@
-## kcpwd Password Sharing - Example Scenarios
+## kcpwd Password Sharing Usage Examples
 
 ###  Real-World Usage Scenarios
 
