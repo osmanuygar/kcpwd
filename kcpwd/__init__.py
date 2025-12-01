@@ -2,6 +2,7 @@
 kcpwd - Cross-platform Keychain Password Manager
 Supports macOS, Linux, and Windows
 Can be used as both CLI tool and Python library
+NEW: Kubernetes integration for secret management
 """
 
 from .core import (
@@ -32,7 +33,23 @@ from .platform_utils import (
     check_clipboard_support
 )
 
-__version__ = "0.7.0"
+# Kubernetes integration (optional - requires kubectl)
+try:
+    from .k8s import (
+        sync_to_k8s,
+        sync_all_to_k8s,
+        import_from_k8s,
+        list_k8s_secrets,
+        delete_k8s_secret,
+        watch_and_sync,
+        K8sError,
+        K8sClient
+    )
+    __k8s_available__ = True
+except ImportError:
+    __k8s_available__ = False
+
+__version__ = "0.8.0"
 __all__ = [
     'set_password',
     'get_password',
@@ -56,5 +73,18 @@ __all__ = [
     'is_platform_supported',
     'check_platform_requirements',
     'check_clipboard_support',
-    'get_backend_info'
+    'get_backend_info',
 ]
+
+# Add K8s functions if available
+if __k8s_available__:
+    __all__.extend([
+        'sync_to_k8s',
+        'sync_all_to_k8s',
+        'import_from_k8s',
+        'list_k8s_secrets',
+        'delete_k8s_secret',
+        'watch_and_sync',
+        'K8sError',
+        'K8sClient',
+    ])

@@ -546,5 +546,457 @@ def ui(host, port, secret, no_open_browser):
         click.echo(click.style(f"❌ Failed to start UI: {e}", fg='red'), err=True)
 
 
+@cli.group()
+def k8s():
+    """Kubernetes secret management commands
+
+    Sync kcpwd passwords to/from Kubernetes secrets.
+
+    Examples:
+        kcpwd k8s sync prod_db --namespace production
+        kcpwd k8s sync-all --namespace myapp
+        kcpwd k8s import db-secret --namespace production
+        kcpwd k8s list --namespace production
+    """
+    pass
+
+
+@k8s.command()
+@click.argument('key')
+@click.option('--namespace', '-n', default='default', help='Kubernetes namespace')
+@click.option('--secret-name', '-s', help='K8s secret name (defaults to key)')
+@click.option('--secret-key', '-k', default='password', help='Key in K8s secret (default: password)')
+@click.option('--master-password', '-m', help='Master password if needed')
+@click.option('--label', '-l', multiple=True, help='Additional labels (format: key=value)')
+@click.option('--kubeconfig', help='Path to kubeconfig file')
+@click.option('--create/--no-create', default=True, help='Create secret if missing (default: yes)')
+def sync(key, namespace, secret_name, secret_key, master_password, label, kubeconfig, create):
+    """Sync a kcpwd password to Kubernetes secret
+
+    Examples:
+        kcpwd k8s sync prod_db --namespace production
+        kcpwd k8s sync api_key --secret-name my-api-secret
+        kcpwd k8s sync db_pass --master-password MY_PASS
+    """
+    try:
+        from .k8s import sync_to_k8s, K8sError
+
+        # Parse labels
+        labels = {}
+        for lbl in label:
+            if '=' in lbl:
+                k, v = lbl.split('=', 1)
+                labels[k] = v
+
+        click.echo(f"🔄 Syncing '{key}' to Kubernetes...")
+
+        result = sync_to_k8s(
+            key=key,
+            namespace=namespace,
+            secret_name=secret_name,
+            secret_key=secret_key,
+            master_password=master_password,
+            labels=labels if labels else None,
+            kubeconfig=kubeconfig,
+            create_if_missing=create
+        )
+
+        click.echo(f"✓ Successfully {result['action']} secret:")
+        click.echo(f"  kcpwd key: {result['kcpwd_key']}")
+        click.echo(f"  K8s secret: {result['k8s_secret']}")
+        click.echo(f"  Namespace: {result['namespace']}")
+        click.echo(f"  Secret key: {result['secret_key']}")
+
+    except K8sError as e:
+        click.echo(click.style(f"✗ Kubernetes error: {e}", fg='red'), err=True)
+    except Exception as e:
+        click.echo(click.style(f"✗ Error: {e}", fg='red'), err=True)
+
+
+@k8s.command()
+@click.option('--namespace', '-n', default='default', help='Kubernetes namespace')
+@click.option('--prefix', '-p', help='Only sync keys with this prefix')
+@click.option('--label', '-l', multiple=True, help='Additional labels (format: key=value)')
+@click.option('--kubeconfig', help='Path to kubeconfig file')
+@click.option('--skip-master', is_flag=True, help='Skip master-protected passwords')
+def sync_all(namespace, prefix, label, kubeconfig, skip_master):
+    """Sync all kcpwd passwords to Kubernetes
+
+    Examples:
+        kcpwd k8s sync-all --namespace production
+        kcpwd k8s sync-all --prefix prod_ --namespace production
+        kcpwd k8s sync-all --skip-master
+    """
+    try:
+        from .k8s import sync_all_to_k8s, K8sError
+
+        # Parse labels
+        labels = {}
+        for lbl in label:
+            if '=' in lbl:
+                k, v = lbl.split('=', 1)
+                labels[k] = v
+
+        click.echo(f"🔄 Syncing all passwords to Kubernetes...")
+        click.echo(f"   Namespace: {namespace}")
+        if prefix:
+            click.echo(f"   Prefix: {prefix}")
+        click.echo()
+
+        result = sync_all_to_k8s(
+            namespace=namespace,
+            prefix=prefix,
+            labels=labels if labels else None,
+            kubeconfig=kubeconfig,
+            skip_master_protected=skip_master
+        )
+
+        click.echo()
+        click.echo(f"📊 Summary:")
+        click.echo(f"   Total: {result['total']}")
+        click.echo(f"   Synced: {click.style(str(result['synced']), fg='green')}")
+        click.echo(f"   Failed: {click.style(str(result['failed']), fg='red')}")
+
+        if result['failed'] > 0:
+            click.echo(f"\n⚠️  Errors:")
+            for error in result['errors']:
+                click.echo(f"   • {error['key']}: {error['error']}")
+
+    except Exception as e:
+        click.echo(click.style(f"✗ Error: {e}", fg='red'), err=True)
+
+
+@k8s.command(name='import')
+@click.argument('secret_name')
+@click.option('--namespace', '-n', default='default', help='Kubernetes namespace')
+@click.option('--key', '-k', help='kcpwd key name (defaults to secret name)')
+@click.option('--secret-key', '-s', default='password', help='Key in K8s secret (default: password)')
+@click.option('--master-password', '-m', is_flag=True, help='Store with master password protection')
+@click.option('--kubeconfig', help='Path to kubeconfig file')
+@click.option('--overwrite', is_flag=True, help='Overwrite if exists in kcpwd')
+def import_secret(secret_name, namespace, key, secret_key, master_password, kubeconfig, overwrite):
+    """Import Kubernetes secret to kcpwd
+
+    Examples:
+        kcpwd k8s import db-credentials --namespace production
+        kcpwd k8s import api-secret --key my_api_key
+        kcpwd k8s import prod-db --master-password
+    """
+    try:
+        from .k8s import import_from_k8s, K8sError
+
+        click.echo(f"📥 Importing secret '{secret_name}' from Kubernetes...")
+
+        result = import_from_k8s(
+            secret_name=secret_name,
+            namespace=namespace,
+            kcpwd_key=key,
+            secret_key=secret_key,
+            use_master=master_password,
+            kubeconfig=kubeconfig,
+            overwrite=overwrite
+        )
+
+        click.echo(f"✓ Successfully imported:")
+        click.echo(f"  K8s secret: {result['k8s_secret']}")
+        click.echo(f"  Namespace: {result['namespace']}")
+        click.echo(f"  kcpwd key: {result['kcpwd_key']}")
+        if result['master_protected']:
+            click.echo(f"  Protection: 🔒 Master password")
+
+    except Exception as e:
+        click.echo(click.style(f"✗ Error: {e}", fg='red'), err=True)
+
+
+@k8s.command(name='list')
+@click.option('--namespace', '-n', default='default', help='Kubernetes namespace')
+@click.option('--managed-only', is_flag=True, help='Only show kcpwd-managed secrets')
+@click.option('--kubeconfig', help='Path to kubeconfig file')
+def list_secrets(namespace, managed_only, kubeconfig):
+    """List Kubernetes secrets
+
+    Examples:
+        kcpwd k8s list --namespace production
+        kcpwd k8s list --managed-only
+    """
+    try:
+        from .k8s import list_k8s_secrets, K8sError
+
+        click.echo(f"📋 Kubernetes secrets in '{namespace}':")
+        if managed_only:
+            click.echo(f"   (showing only kcpwd-managed secrets)")
+        click.echo()
+
+        secrets = list_k8s_secrets(
+            namespace=namespace,
+            managed_only=managed_only,
+            kubeconfig=kubeconfig
+        )
+
+        if not secrets:
+            click.echo("   No secrets found")
+            return
+
+        for secret in secrets:
+            click.echo(f"  • {secret['name']}")
+            click.echo(f"    Keys: {', '.join(secret['keys'])}")
+            click.echo()
+
+        click.echo(f"Total: {len(secrets)} secrets")
+
+    except Exception as e:
+        click.echo(click.style(f"✗ Error: {e}", fg='red'), err=True)
+
+
+@k8s.command()
+@click.argument('secret_name')
+@click.option('--namespace', '-n', default='default', help='Kubernetes namespace')
+@click.option('--kubeconfig', help='Path to kubeconfig file')
+@click.confirmation_option(prompt='Are you sure you want to delete this secret?')
+def delete(secret_name, namespace, kubeconfig):
+    """Delete Kubernetes secret
+
+    Examples:
+        kcpwd k8s delete db-credentials --namespace production
+    """
+    try:
+        from .k8s import delete_k8s_secret, K8sError
+
+        click.echo(f"🗑️  Deleting secret '{secret_name}'...")
+
+        success = delete_k8s_secret(
+            secret_name=secret_name,
+            namespace=namespace,
+            kubeconfig=kubeconfig
+        )
+
+        if success:
+            click.echo(f"✓ Secret '{secret_name}' deleted from namespace '{namespace}'")
+
+    except Exception as e:
+        click.echo(click.style(f"✗ Error: {e}", fg='red'), err=True)
+
+
+@k8s.command()
+@click.option('--namespace', '-n', default='default', help='Kubernetes namespace')
+@click.option('--interval', '-i', default=60, type=int, help='Sync interval in seconds (default: 60)')
+@click.option('--prefix', '-p', help='Only sync keys with this prefix')
+@click.option('--kubeconfig', help='Path to kubeconfig file')
+def watch(namespace, interval, prefix, kubeconfig):
+    """Watch and auto-sync passwords to Kubernetes
+
+    Continuously monitors kcpwd and syncs changes to Kubernetes.
+
+    Examples:
+        kcpwd k8s watch --namespace production
+        kcpwd k8s watch --namespace myapp --interval 120
+        kcpwd k8s watch --prefix prod_ --namespace production
+    """
+    try:
+        from .k8s import watch_and_sync
+
+        watch_and_sync(
+            namespace=namespace,
+            interval=interval,
+            prefix=prefix,
+            kubeconfig=kubeconfig
+        )
+
+    except Exception as e:
+        click.echo(click.style(f"✗ Error: {e}", fg='red'), err=True)
+
+
+@cli.group()
+def helm():
+    """Helm values integration commands"""
+    pass
+
+
+@helm.command()
+@click.argument('input_file', type=click.Path(exists=True))
+@click.option('--output', '-o', type=click.Path(), help='Output file path')
+@click.option('--strict/--no-strict', default=True, help='Fail on missing passwords')
+@click.option('--validate/--no-validate', default=True, help='Validate YAML syntax')
+def template(input_file, output, strict, validate):
+    """Process Helm values template with kcpwd references
+
+    Replaces {{ kcpwd('key') }} with actual passwords.
+
+    Examples:
+        kcpwd helm template values.yaml -o values-processed.yaml
+        kcpwd helm template values.yaml --no-strict
+    """
+    try:
+        from .helm import process_helm_values_file
+
+        click.echo(f"📋 Processing Helm values: {input_file}")
+
+        result = process_helm_values_file(
+            input_file=input_file,
+            output_file=output,
+            strict=strict,
+            validate_yaml=validate
+        )
+
+        if output:
+            click.echo(f"✓ Processed values written to: {output}")
+        else:
+            click.echo("\n" + "=" * 60)
+            import yaml
+            click.echo(yaml.dump(result, default_flow_style=False))
+            click.echo("=" * 60)
+
+    except Exception as e:
+        click.echo(f"✗ Failed to process values: {e}", err=True)
+        raise click.Abort()
+
+
+@helm.command()
+@click.argument('values_file', type=click.Path(exists=True))
+def scan(values_file):
+    """Scan Helm values for kcpwd references
+
+    Shows all {{ kcpwd('key') }} references found.
+
+    Example:
+        kcpwd helm scan values.yaml
+    """
+    try:
+        from .helm import scan_values_for_kcpwd_refs
+
+        with open(values_file, 'r') as f:
+            content = f.read()
+
+        refs = scan_values_for_kcpwd_refs(content)
+
+        if not refs:
+            click.echo("No kcpwd references found")
+            return
+
+        click.echo(f"\n📋 Found {len(refs)} kcpwd reference(s):\n")
+
+        for i, ref in enumerate(refs, 1):
+            click.echo(f"{i}. Key: {click.style(ref['key'], fg='green', bold=True)}")
+            if ref['needs_master']:
+                click.echo(f"   Master: {'Yes (inline)' if ref['master_inline'] else 'Yes (will prompt)'}")
+            click.echo(f"   Match: {ref['full_match']}")
+            click.echo()
+
+    except Exception as e:
+        click.echo(f"✗ Failed to scan values: {e}", err=True)
+        raise click.Abort()
+
+
+@helm.command()
+@click.argument('chart_dir', type=click.Path(exists=True))
+@click.option('--namespace', '-n', default='default', help='Kubernetes namespace')
+@click.option('--values', default='values.yaml', help='Values file name')
+@click.option('--release', help='Helm release name (for secret naming)')
+@click.option('--kubeconfig', type=click.Path(), help='Path to kubeconfig')
+def sync(chart_dir, namespace, values, release, kubeconfig):
+    """Sync Helm chart's kcpwd references to K8s secrets
+
+    Scans values.yaml for {{ kcpwd('key') }} references and syncs them to K8s.
+
+    Examples:
+        kcpwd helm sync ./mychart --namespace production
+        kcpwd helm sync ./mychart --release myapp --namespace prod
+    """
+    try:
+        from .helm import sync_helm_chart_secrets
+
+        click.echo(f"🔄 Syncing Helm chart secrets to Kubernetes...")
+        click.echo(f"   Chart: {chart_dir}")
+        click.echo(f"   Namespace: {namespace}")
+        if release:
+            click.echo(f"   Release: {release}")
+        click.echo()
+
+        result = sync_helm_chart_secrets(
+            chart_dir=chart_dir,
+            namespace=namespace,
+            values_file=values,
+            release_name=release,
+            kubeconfig=kubeconfig
+        )
+
+        if result['synced'] == 0:
+            click.echo("ℹ️  No kcpwd references found in values")
+            return
+
+        click.echo(f"\n✓ Sync complete:")
+        click.echo(f"  Synced: {result['synced']}")
+        click.echo(f"  Failed: {result['failed']}")
+
+        if result['references']:
+            click.echo(f"\n📋 Synced secrets:")
+            for ref in result['references']:
+                click.echo(f"  • {ref['key']} → {ref['secret_name']} ({ref['namespace']})")
+
+        if result['errors']:
+            click.echo(f"\n⚠️  Errors:")
+            for error in result['errors']:
+                click.echo(f"  • {error['key']}: {error['error']}", err=True)
+
+    except Exception as e:
+        click.echo(f"✗ Failed to sync: {e}", err=True)
+        raise click.Abort()
+
+
+@helm.command()
+def example():
+    """Generate example Helm values with kcpwd integration
+
+    Example:
+        kcpwd helm example > values.yaml
+    """
+    from .helm import generate_example_values
+
+    example = generate_example_values()
+    click.echo(example)
+
+
+@helm.command()
+@click.argument('output_dir', type=click.Path())
+def plugin(output_dir):
+    """Generate Helm plugin package
+
+    Creates files for helm-kcpwd plugin installation.
+
+    Example:
+        kcpwd helm plugin ./helm-kcpwd-plugin
+    """
+    try:
+        from .helm import create_helm_plugin_package
+        from pathlib import Path
+
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        click.echo(f"📦 Generating Helm plugin package...")
+
+        package = create_helm_plugin_package()
+
+        for filename, content in package.items():
+            file_path = output_path / filename
+            with open(file_path, 'w') as f:
+                f.write(content)
+
+            # Make shell scripts executable
+            if filename.endswith('.sh'):
+                file_path.chmod(0o755)
+
+            click.echo(f"✓ Created: {file_path}")
+
+        click.echo(f"\n✓ Helm plugin package created in: {output_path}")
+        click.echo(f"\nTo install:")
+        click.echo(f"  cd {output_path}")
+        click.echo(f"  helm plugin install .")
+
+    except Exception as e:
+        click.echo(f"✗ Failed to generate plugin: {e}", err=True)
+        raise click.Abort()
+
+
 if __name__ == '__main__':
     cli()
