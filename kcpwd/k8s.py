@@ -1,14 +1,6 @@
 """
-kcpwd.k8s - Kubernetes Secret Management Integration
+kcpwd.k8s - Kubernetes Secret Management Integration (FIXED)
 Native Kubernetes support for syncing passwords to/from K8s secrets
-
-Features:
-- Sync kcpwd passwords to Kubernetes secrets
-- Import Kubernetes secrets to kcpwd
-- Watch mode for auto-sync
-- Support for multiple namespaces
-- Label-based filtering
-- Master password support
 """
 
 import base64
@@ -86,7 +78,7 @@ class K8sClient:
             raise K8sError(f"kubectl command failed: {e}")
 
     def secret_exists(self, name: str) -> bool:
-        """Check if secret exists"""
+        """Check if secret exists - more robust implementation"""
         code, stdout, _ = self._kubectl_cmd('get', 'secret', name, '-o', 'name', '--ignore-not-found')
         # Secret exists if we got output and return code is 0
         return code == 0 and stdout.strip() != ""
@@ -108,6 +100,9 @@ class K8sClient:
 
         Returns:
             True if successful
+
+        Raises:
+            K8sError: If creation fails
         """
         # Build secret manifest
         manifest = {
@@ -136,12 +131,15 @@ class K8sClient:
         code, stdout, stderr = self._kubectl_cmd('apply', '-f', '-', input=manifest_json)
 
         if code != 0:
+            # Check if it's because secret already exists
+            if "AlreadyExists" in stderr or "already exists" in stderr:
+                raise K8sError(f"Secret '{name}' already exists")
             raise K8sError(f"Failed to create secret: {stderr}")
 
         return True
 
     def update_secret(self, name: str, data: Dict[str, str]) -> bool:
-        """Update existing secret"""
+        """Update existing secret - simplified without exists check"""
         # Get existing secret
         code, stdout, stderr = self._kubectl_cmd('get', 'secret', name, '-o', 'json')
 
@@ -250,7 +248,9 @@ def sync_to_k8s(
     kubeconfig: Optional[str] = None,
     create_if_missing: bool = True
 ) -> Dict:
-    """Sync a kcpwd password to Kubernetes secret
+    """Sync a kcpwd password to Kubernetes secret - FIXED version
+
+    Uses create-first approach for better reliability
 
     Args:
         key: kcpwd password key
@@ -303,11 +303,12 @@ def sync_to_k8s(
     try:
         client.create_secret(secret_name, data, labels=labels)
     except K8sError as e:
+        error_msg = str(e)
         # If secret already exists, update it
-        if "AlreadyExists" in str(e) or "already exists" in str(e).lower():
+        if "already exists" in error_msg.lower():
             client.update_secret(secret_name, data)
             action = "updated"
-        elif not create_if_missing and ("NotFound" in str(e) or "not found" in str(e).lower()):
+        elif not create_if_missing and ("not found" in error_msg.lower()):
             raise K8sError(f"Secret '{secret_name}' does not exist and create_if_missing=False")
         else:
             raise
