@@ -286,9 +286,8 @@ kcpwd ui
 # Open browser automatically (default: yes)
 kcpwd ui --no-open-browser  # Don't open browser
 ```
-# Insert this section in README.md after the "Features" section
 
-## 🚀 Kubernetes Integration (NEW in v0.8.0)
+## Kubernetes Integration (NEW in v0.8.0)
 
 **kcpwd now includes native Kubernetes support!** Sync passwords to/from Kubernetes secrets with zero additional infrastructure.
 
