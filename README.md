@@ -4,56 +4,11 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/kcpwd.svg)](https://pypi.org/project/kcpwd/)
 [![Python Version](https://img.shields.io/pypi/pyversions/kcpwd.svg)](https://pypi.org/project/kcpwd/)
-[![License](https://img.shields.io/pypi/l/kcpwd.svg)]  
+[![License](https://img.shields.io/pypi/l/kcpwd.svg)](https://github.com/osmanuygar/kcpwd/blob/main/LICENSE)
+
 # kcpwd
 
-**Cross-platform Keychain Password Manager CLI, Library & Web UI** - A powerful password manager for **macOS, Linux, and Windows** with native system keyring support and modern web interface.
-
-## ✨ Features
-
--  **🌐 NEW: Modern Web UI** - Beautiful web interface with FastAPI backend
--  **🪟 NEW: Windows Support** - Native Windows Credential Locker integration
--  **Cross-platform**: Supports macOS, Linux, and Windows
--  **Automatic Backend Selection**: System keyring or encrypted file fallback
--  **Works Everywhere**: Docker, CI/CD, headless servers - no dependencies!
--  Secure storage using native system keyring (macOS Keychain / Linux Secret Service / Windows Credential Locker)
--  **Master Password Protection** - Extra protection layer for sensitive passwords
--  Automatic clipboard copying on all platforms
--  Cryptographically secure password generation
--  **Password Strength Checker** - Analyze password strength with detailed feedback
--  **Password Sharing** - Secure temporary password sharing with expiration
--  Import/Export functionality for backups
--  Simple CLI interface
--  Python library for programmatic access
--  **Decorator support** for automatic password injection
--  No passwords stored in plain text
--  Native OS integration when available
-
-
-## Platform Support
-
-### macOS
-- ✅ Native macOS Keychain integration
-- ✅ Automatic clipboard copying with `pbcopy`
-- ✅ Full feature support
-- ✅ Web UI support
-
-### Linux
-- ✅ **Works immediately - no setup required!**
-- ✅ Auto-detects system keyring (gnome-keyring, KWallet, etc.)
-- ✅ Falls back to encrypted file storage if no keyring
-- ✅ Optional clipboard support via `xclip`, `xsel`, or `wl-copy` (auto-detected)
-- ✅ Perfect for Docker, CI/CD, headless servers
-- ✅ Web UI support
-- 📦 Zero required dependencies (secretstorage optional for system keyring)
-
-### Windows
-- ✅ **Native Windows Credential Locker integration**
-- ✅ Automatic clipboard copying via `clip.exe` or `pywin32`
-- ✅ Full feature support
-- ✅ Web UI support
-- ✅ Works on Windows 10, 11, and Server editions
-- 📦 Optional `pywin32` for enhanced clipboard support
+**Cross-platform Keychain Password Manager CLI, Library & Web UI with Kubernetes Integration** - A powerful password manager for **macOS, Linux, and Windows** with native system keyring support, modern web interface, and native Kubernetes secret management.
 
 ## Installation
 
@@ -79,6 +34,74 @@ git clone https://github.com/osmanuygar/kcpwd.git
 cd kcpwd
 pip install -e .[ui]  # Install with UI support
 ```
+
+## Quick Start
+
+### CLI Usage
+
+```bash
+# Check platform support and configuration
+kcpwd info
+
+# Store a password
+kcpwd set github_token ghp_xxxxxxxxxxxx
+
+# Retrieve password (copies to clipboard automatically)
+kcpwd get github_token
+
+# Generate strong password
+kcpwd generate -l 20 -s myapp
+
+# List all passwords
+kcpwd list
+```
+
+### 🌐 Web UI Usage
+
+```bash
+# Start the web UI
+kcpwd ui
+
+# Custom port
+kcpwd ui --port 8000
+
+# With persistent secret
+export KCPWD_UI_SECRET="your-secure-secret"
+kcpwd ui
+```
+
+Then open your browser to `http://localhost:8765` and enter the UI secret shown in the terminal.
+
+
+## Platform Support
+
+### macOS
+- ✅ Native macOS Keychain integration
+- ✅ Automatic clipboard copying with `pbcopy`
+- ✅ Full feature support
+- ✅ Web UI support
+- ✅ Kubernetes integration
+
+### Linux
+- ✅ **Works immediately - no setup required!**
+- ✅ Auto-detects system keyring (gnome-keyring, KWallet, etc.)
+- ✅ Falls back to encrypted file storage if no keyring
+- ✅ Optional clipboard support via `xclip`, `xsel`, or `wl-copy` (auto-detected)
+- ✅ Perfect for Docker, CI/CD, headless servers
+- ✅ Web UI support
+- ✅ Kubernetes integration
+- 📦 Zero required dependencies (secretstorage optional for system keyring)
+
+### Windows
+- ✅ **Native Windows Credential Locker integration**
+- ✅ Automatic clipboard copying via `clip.exe` or `pywin32`
+- ✅ Full feature support
+- ✅ Web UI support
+- ✅ Kubernetes integration
+- ✅ Works on Windows 10, 11, and Server editions
+- 📦 Optional `pywin32` for enhanced clipboard support
+
+
 
 ### Platform-Specific Requirements
 
@@ -130,52 +153,131 @@ pip install pywin32
 
 **Note:** Windows Credential Locker is built into Windows 10/11, no additional setup needed!
 
-## Quick Start
 
-### CLI Usage
 
-```bash
-# Check platform support and configuration
-kcpwd info
-
-# Store a password
-kcpwd set github_token ghp_xxxxxxxxxxxx
-
-# Retrieve password (copies to clipboard automatically)
-kcpwd get github_token
-
-# Generate strong password
-kcpwd generate -l 20 -s myapp
-
-# List all passwords
-kcpwd list
-```
-
-### 🌐 Web UI Usage
+### ⎈ Kubernetes Usage
 
 ```bash
-# Start the web UI
-kcpwd ui
+# Sync a password to K8s
+kcpwd k8s sync prod_db --namespace production
 
-# Custom port
-kcpwd ui --port 8000
+# Sync all passwords
+kcpwd k8s sync-all --namespace production
 
-# With persistent secret
-export KCPWD_UI_SECRET="your-secure-secret"
-kcpwd ui
+# Import from K8s
+kcpwd k8s import db-credentials --namespace production
+
+# Watch mode (auto-sync)
+kcpwd k8s watch --namespace production
+
+# List K8s secrets
+kcpwd k8s list --namespace production
 ```
 
-Then open your browser to `http://localhost:8765` and enter the UI secret shown in the terminal.
+## Kubernetes Integration Deep Dive
 
-**Web UI Features:**
-- 📋 View and manage all passwords
-- 🔍 Search passwords instantly
-- ➕ Add new passwords with strength checking
-- 🎲 Generate secure passwords with custom rules
-- 📤 Export/Import for backups
-- 🔒 Master password support
-- 🔗 Secure password sharing
-- 📊 Real-time statistics
+### Common Commands
+
+#### Sync Single Password
+
+```bash
+# Basic sync
+kcpwd k8s sync prod_db --namespace production
+
+# Custom secret name
+kcpwd k8s sync api_key --secret-name my-api-secret --namespace myapp
+
+# Master-protected password
+kcpwd k8s sync secure_db --master-password MY_MASTER_PASS --namespace prod
+
+# With custom labels
+kcpwd k8s sync db_pass --label app=myapp --label tier=backend
+```
+
+#### Sync All Passwords
+
+```bash
+# Sync all passwords to a namespace
+kcpwd k8s sync-all --namespace production
+
+# Sync only passwords with prefix
+kcpwd k8s sync-all --prefix prod_ --namespace production
+
+# Skip master-protected passwords
+kcpwd k8s sync-all --skip-master --namespace dev
+```
+
+#### Import from Kubernetes
+
+```bash
+# Import a secret to kcpwd
+kcpwd k8s import db-credentials --namespace production
+
+# Import with custom kcpwd key name
+kcpwd k8s import api-secret --key my_api_key
+
+# Import and protect with master password
+kcpwd k8s import prod-db --master-password
+```
+
+#### Watch Mode (Auto-sync)
+
+```bash
+# Auto-sync every 60 seconds
+kcpwd k8s watch --namespace production
+
+# Custom interval
+kcpwd k8s watch --namespace myapp --interval 120
+
+# With prefix filter
+kcpwd k8s watch --prefix prod_ --namespace production
+```
+
+### Use Cases Overview
+
+**Common Scenarios:**
+- ✅ CI/CD pipelines (GitHub Actions, GitLab CI, Jenkins)
+- ✅ GitOps workflows (ArgoCD, Flux)
+- ✅ Local development (Minikube, Kind)
+- ✅ Multi-environment deployments
+- ✅ Blue-green and canary deployments
+- ✅ Secret rotation automation
+- ✅ Disaster recovery and backups
+
+**📚 [Complete Usage Examples →](usages/K8S_USAGE_EXAMPLES.md)**
+
+Quick example - CI/CD Pipeline:
+
+```yaml
+# GitHub Actions
+- name: Sync secrets
+  run: |
+    pip install kcpwd
+    kcpwd set db_password "${{ secrets.DB_PASSWORD }}"
+    kcpwd k8s sync-all --namespace production
+```
+
+### Helm Integration
+
+Use kcpwd passwords directly in Helm values:
+
+```yaml
+# values.yaml
+database:
+  password: "{{ kcpwd('db_password') }}"
+api:
+  key: "{{ kcpwd('api_key') }}"
+production:
+  secret: "{{ kcpwd('prod_secret', master=true) }}"
+```
+
+```bash
+# Process and deploy
+kcpwd helm template values.yaml -o values-processed.yaml
+helm install myapp ./chart -f values-processed.yaml
+```
+
+**📚 [Helm Integration Examples →](usages/K8S_USAGE_EXAMPLES.md#helm-integration-examples)**
 
 ## Usage
 
@@ -185,24 +287,26 @@ Then open your browser to `http://localhost:8765` and enter the UI secret shown 
 # Check your platform configuration
 kcpwd info
 
-# Output example (Windows):
+# Output example (macOS):
 # 🔧 Platform Information
 # ========================================
 # Platform: macOS
 # Supported: ✓ Yes
+# 
 # 🔐 Storage Backend
 # ========================================
 # Type: System Keyring
 # Backend: Keyring
 # Status: ✓ Active (OS-native secure storage)
-#📋 Clipboard
-#========================================
-#Status: ✓ Available
-#
-#💡 macOS Notes:
-#  • Using macOS Keychain (native integration)
-#  • View passwords: Keychain Access app
-#  • Command line: security find-generic-password -s kcpwd
+# 
+# 📋 Clipboard
+# ========================================
+# Status: ✓ Available
+# 
+# 💡 macOS Notes:
+#   • Using macOS Keychain (native integration)
+#   • View passwords: Keychain Access app
+#   • Command line: security find-generic-password -s kcpwd
 ```
 
 ### CLI Commands
@@ -270,6 +374,7 @@ kcpwd generate -l 6 --no-uppercase --no-lowercase --no-symbols
 # 3. Select password and duration
 # 4. Get secure link: http://localhost:8765/s/ABC123
 ```
+**📚 [Complete Usage Examples →](usages/PASSWORD_SHARING_EXAMPLES.md)**
 
 #### Web UI
 ```bash
@@ -287,93 +392,6 @@ kcpwd ui
 kcpwd ui --no-open-browser  # Don't open browser
 ```
 
-## Kubernetes Integration (NEW in v0.8.0)
-
-**kcpwd now includes native Kubernetes support!** Sync passwords to/from Kubernetes secrets with zero additional infrastructure.
-
-### Quick Start
-
-```bash
-# Store password
-kcpwd set prod_db "my_secure_password"
-
-# Sync to Kubernetes
-kcpwd k8s sync prod_db --namespace production
-
-# That's it! Your password is now a Kubernetes secret
-```
-
-### Key Features
-
-- ✅ **Bi-directional sync** - kcpwd ↔ Kubernetes secrets
-- ✅ **Watch mode** - Auto-sync with configurable intervals
-- ✅ **Master password support** - Extra security layer
-- ✅ **GitOps friendly** - Works with ArgoCD, Flux, etc.
-- ✅ **CI/CD ready** - Perfect for deployment pipelines
-- ✅ **Zero infrastructure** - Just needs kubectl
-
-### Common Commands
-
-```bash
-# Sync single password
-kcpwd k8s sync prod_db --namespace production
-
-# Sync all passwords
-kcpwd k8s sync-all --namespace myapp
-
-# Import from Kubernetes
-kcpwd k8s import db-credentials --namespace production
-
-# List secrets
-kcpwd k8s list --namespace production
-
-# Watch mode (auto-sync every 60s)
-kcpwd k8s watch --namespace production
-```
-
-### CI/CD Example
-
-```yaml
-# GitHub Actions
-- name: Sync passwords to K8s
-  run: |
-    pip install kcpwd
-    kcpwd set db_password "${{ secrets.DB_PASSWORD }}"
-    kcpwd k8s sync-all --namespace production
-```
-
-### Use in Deployments
-
-```yaml
-# deployment.yaml
-env:
-- name: DB_PASSWORD
-  valueFrom:
-    secretKeyRef:
-      name: prod-db  # Created by kcpwd
-      key: password
-```
-
-**📚 [Full Kubernetes Guide →](K8S_GUIDE.md)**
-
-### Why kcpwd for Kubernetes?
-
-| Feature | kcpwd | Vault | Sealed Secrets |
-|---------|-------|-------|----------------|
-| **Setup Time** | 0 minutes | Hours | 30+ minutes |
-| **Infrastructure** | None | Servers + DB | Controller |
-| **Learning Curve** | Minimal | Steep | Moderate |
-| **Local Dev** | ✅ Perfect | ⚠️ Complex | ❌ No |
-| **CI/CD** | ✅ Simple | ✅ Yes | ✅ Yes |
-
-Perfect for:
--  Teams who want simple secret management
--  CI/CD pipelines
--  Multi-environment deployments
--  GitOps workflows
--  Local development that mirrors production
-
----
 ### Library Usage
 
 #### Basic Operations
@@ -430,6 +448,33 @@ if has_master_password("prod_db"):
 
 # List all master-protected keys
 keys = list_master_keys()
+```
+
+#### Kubernetes Integration
+
+```python
+from kcpwd.k8s import sync_to_k8s, sync_all_to_k8s, import_from_k8s
+
+# Sync single password
+result = sync_to_k8s(
+    key="prod_db",
+    namespace="production",
+    secret_name="database-credentials",
+    labels={"app": "myapp"}
+)
+
+# Sync all passwords
+results = sync_all_to_k8s(
+    namespace="production",
+    prefix="prod_"
+)
+
+# Import from K8s
+result = import_from_k8s(
+    secret_name="existing-secret",
+    namespace="production",
+    kcpwd_key="imported_password"
+)
 ```
 
 #### Decorators
@@ -495,6 +540,7 @@ new_password = response.json()["password"]
 - **Master Password**: Not stored anywhere (must be remembered)
 - **Web UI**: Session-based authentication with secure tokens
 - **API**: Bearer token authentication
+- **Kubernetes**: Uses native K8s RBAC and secret encryption at rest
 
 ## Platform-Specific Notes
 
@@ -503,6 +549,7 @@ new_password = response.json()["password"]
 - Passwords accessible via: `security find-generic-password -s kcpwd -a <key> -w`
 - Clipboard integration works automatically
 - Web UI runs on localhost by default
+- Kubernetes integration requires kubectl
 
 ### Linux
 - Requires D-Bus Secret Service daemon (gnome-keyring, KWallet, etc.)
@@ -511,6 +558,7 @@ new_password = response.json()["password"]
 - Use shell pipes for clipboard: `kcpwd get key | xclip -selection clipboard`
 - Works in both X11 and Wayland (with appropriate clipboard tools)
 - Web UI works perfectly on all Linux distributions
+- Kubernetes integration requires kubectl
 
 ### Windows
 - Uses Windows Credential Locker (built into Windows 10/11)
@@ -519,73 +567,7 @@ new_password = response.json()["password"]
 - Clipboard integration via `clip.exe` (built-in) or `pywin32` (optional, better)
 - Web UI works on all Windows versions
 - Compatible with Windows Server editions
-
-## Web UI Configuration
-
-### Environment Variables
-
-```bash
-# UI Secret (recommended to set)
-export KCPWD_UI_SECRET="your-secure-random-string"
-
-# Host (default: 127.0.0.1)
-export KCPWD_UI_HOST="0.0.0.0"
-
-# Port (default: 8765)
-export KCPWD_UI_PORT="8000"
-
-# Enable CORS for separate frontend (default: false)
-export KCPWD_UI_CORS="true"
-
-# Debug mode (default: false)
-export KCPWD_UI_DEBUG="true"
-```
-
-### Deployment
-
-**Development:**
-```bash
-kcpwd ui
-```
-
-**Production (with gunicorn):**
-```bash
-pip install gunicorn
-gunicorn kcpwd.ui.api:app --bind 0.0.0.0:8765 --workers 4
-```
-
-**Docker:**
-```dockerfile
-FROM python:3.11-slim
-RUN pip install kcpwd[ui]
-ENV KCPWD_UI_SECRET="change-me"
-CMD ["kcpwd", "ui", "--host", "0.0.0.0"]
-```
-
-**Windows Service (NSSM):**
-```powershell
-# Download NSSM from https://nssm.cc/
-nssm install kcpwd "C:\Python311\Scripts\kcpwd.exe" "ui"
-nssm set kcpwd AppEnvironmentExtra KCPWD_UI_SECRET=your-secret
-nssm start kcpwd
-```
-
-**Systemd Service (Linux):**
-```ini
-[Unit]
-Description=kcpwd Web UI
-After=network.target
-
-[Service]
-Type=simple
-User=youruser
-Environment="KCPWD_UI_SECRET=your-secret"
-ExecStart=/usr/local/bin/kcpwd ui --host 127.0.0.1
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
+- Kubernetes integration requires kubectl
 
 ## Requirements
 
@@ -600,10 +582,13 @@ WantedBy=multi-user.target
 - `cryptography>=41.0.0` (for master password protection)
 - `click>=8.0.0` (for CLI)
 - `keyring>=23.0.0` (for keyring abstraction)
+- `pyyaml>=6.0.0` (for Helm integration)
 - **Web UI** (optional):
   - `fastapi>=0.104.0`
   - `uvicorn[standard]>=0.24.0`
   - `pydantic>=2.0.0`
+- **Kubernetes** (optional):
+  - `kubectl` CLI tool
 
 ## Troubleshooting
 
@@ -666,68 +651,155 @@ WantedBy=multi-user.target
 - May need to allow through Windows Firewall
 - Use `kcpwd ui --host 127.0.0.1` for localhost only
 
+### Kubernetes Issues
+
+**"kubectl not found"**
+```bash
+# Install kubectl
+# macOS
+brew install kubectl
+
+# Linux
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+chmod +x kubectl
+sudo mv kubectl /usr/local/bin/
+
+# Windows (Chocolatey)
+choco install kubernetes-cli
+```
+
+**"Permission denied" (K8s)**
+```bash
+# Check RBAC permissions
+kubectl auth can-i create secrets -n production
+
+# If denied, ask your cluster admin for permissions
+```
+
+**"Secret already exists"**
+```bash
+# kcpwd will update it automatically, or manually:
+kubectl delete secret prod-db -n production
+kcpwd k8s sync prod_db --namespace production
+```
+## 🚀 Kubernetes Integration (NEW in v0.8.0)
+
+**kcpwd now includes native Kubernetes support!** Sync passwords to/from Kubernetes secrets with zero additional infrastructure.
+
+### Why kcpwd for Kubernetes?
+
+| Feature | kcpwd | Vault | Sealed Secrets | External Secrets |
+|---------|-------|-------|----------------|------------------|
+| **Setup Time** | 0 minutes | Hours | 30+ minutes | 1+ hour |
+| **Infrastructure** | None | Servers + DB | Controller | Operators |
+| **Learning Curve** | Minimal | Steep | Moderate | Moderate |
+| **Local Dev** | ✅ Perfect | ⚠️ Complex | ❌ No | ⚠️ Limited |
+| **CI/CD** | ✅ Simple | ✅ Yes | ✅ Yes | ✅ Yes |
+| **GitOps** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
+| **Master Password** | ✅ Yes | ❌ No | ❌ No | ❌ No |
+| **Cost** | Free | $$$ | Free | Free |
+
+### Quick Start
+
+```bash
+# 1. Store password locally
+kcpwd set prod_db "my_secure_password"
+
+# 2. Sync to Kubernetes
+kcpwd k8s sync prod_db --namespace production
+
+# 3. Use in your deployment
+kubectl get secret prod-db -n production
+```
+
+That's it! Your password is now a Kubernetes secret.
+
+### Key K8s Features
+
+- ✅ **Bi-directional sync** - kcpwd ↔ Kubernetes secrets
+- ✅ **Watch mode** - Auto-sync with configurable intervals
+- ✅ **Master password support** - Extra security layer for sensitive passwords
+- ✅ **GitOps friendly** - Works with ArgoCD, Flux, etc.
+- ✅ **CI/CD ready** - Perfect for deployment pipelines
+- ✅ **Helm integration** - Use `{{ kcpwd('key') }}` in values.yaml
+- ✅ **Zero infrastructure** - Just needs kubectl
+- ✅ **Multi-namespace** - Sync to different namespaces
+- ✅ **Label management** - Add custom labels to secrets
+
+
+
+
 ## Changelog
 
-### v0.7.0 (NEXT) - Windows Support
+### v0.8.0 (LATEST) - Kubernetes & Helm Integration 🚀
+- 🎯 **Native Kubernetes support** - Sync passwords to/from K8s secrets
+- ⎈ **Helm integration** - Use `{{ kcpwd('key') }}` in values.yaml
+- 🔄 **Bi-directional sync** - Import secrets from K8s to kcpwd
+- 👀 **Watch mode** - Auto-sync with configurable intervals
+- 🏷️ **Label management** - Add custom labels to K8s secrets
+- 🔐 **Master password in K8s** - Extra security for production
+- 🚀 **CI/CD ready** - Perfect for GitHub Actions, GitLab CI, etc.
+- 📦 **Zero infrastructure** - Just needs kubectl
+- 🎨 **GitOps friendly** - Works with ArgoCD, Flux
+
+### v0.7.0 - Windows Support & Password Sharing
 - 🪟 **Full Windows support** with Windows Credential Locker
 - ✅ Windows clipboard integration (clip.exe + pywin32)
+- 🔗 **Password sharing** - Secure temporary links with expiration
+- ⏱️ Time-based expiration (5m - 3h)
+- 🔒 Multiple security options (anyone/once/password)
+- 📊 Access logging and statistics
+- 🎨 Beautiful share access pages
+- 🧹 Automatic cleanup
 - ✅ Platform detection for Windows
-- ✅ All features working on Windows 10/11
-- ✅ Windows-specific documentation
-- ✅ Tested on Windows Server editions
+- ✅ Tested on Windows 10/11 & Server editions
 
-### v0.6.4 - Password Sharing
--  NEW: Pastebin-style temporary password sharing
--  Time-based expiration (5m - 3h)
--  Multiple security options (anyone/once/password)
--  Access logging and statistics
--  Beautiful share access pages
--  Automatic cleanup
+### v0.6.4 - Enhanced Web UI
+- 🌐 **Modern Web UI** with FastAPI backend
+- 🎨 Beautiful, responsive interface for password management
+- 📊 Real-time password strength visualization
+- 🎲 Interactive password generator with live preview
+- 📤 Import/Export via Web UI
+- 🔐 Session-based authentication
+- 🎭 Enhanced UI with logo and dark mode
+- 🔌 **REST API** for programmatic access
 
-### v0.6.3 - Web UI & Enhanced Features
--  Modern Web UI** with FastAPI backend
--  Beautiful, responsive interface** for password management
--  Real-time password strength visualization**
--  Interactive password generator** with live preview
--  Import/Export via Web UI**
--  Session-based authentication**
--  Enhanced UI with logo
--  **REST API** for programmatic access
--  Enhanced CLI with `kcpwd ui` command
--  Improved documentation and examples
--  Better error handling and user feedback
+### v0.5.0 - Linux Support and Universal Compatibility
+- 🐧 Full Linux support via D-Bus Secret Service
+- 📋 Platform detection and info command (`kcpwd info`)
+- 📎 Optional clipboard support on Linux
+- 💾 Encrypted file backend for universal compatibility
+- 🔍 Automatic backend detection
+- 🛠️ `get_backend_info()` API function
 
-### v0.5.0 - Linux Support and Encrypted File Backend
--   Full Linux support via D-Bus Secret Service
--   Platform detection and info command (`kcpwd info`)
--   Optional clipboard support on Linux
--   Encrypted file backend for universal compatibility
--   Automatic backend detection
--   `get_backend_info()` API function
+### v0.4.1 - Master Password & Strength Checking
+- 🔐 `@require_master_password` decorator
+- 💪 Password strength checker with visual feedback
+- 📊 CLI `check-strength` command
 
-### v0.4.1
--  `@require_master_password` decorator
--  Password strength checker with visual feedback
--  CLI `check-strength` command
+### v0.4.0 - Security Enhancements
+- 🔒 Per-password master password protection
+- 🔐 AES-256-GCM encryption
+- 🔑 PBKDF2-SHA256 key derivation (600k iterations)
 
-### v0.4.0
--  Per-password master password protection
--  AES-256-GCM encryption
--  PBKDF2-SHA256 key derivation
+### v0.3.0 - Import/Export
+- 📤 Import/export functionality
+- 📋 `list` command for viewing all passwords
 
-### v0.3.0
--  Import/export functionality
--  `list` command
+### v0.2.1 - Password Generation
+- 🎲 Cryptographically secure password generation
+- ⚙️ Customizable generation options
 
-### v0.2.1
--  Password generation
+### v0.2.0 - Python Library
+- 📦 Python library support
+- 🎯 `@require_password` decorator
+- 🔌 Programmatic API access
 
-### v0.2.0
--  Python library support
--  `@require_password` decorator
-
-### v0.1.0
-- 🎉 Initial release (macOS only)
+### v0.1.0 - Initial Release
+- 🎉 macOS Keychain integration
+- 💻 CLI interface
+- 📋 Basic password management
+- 🔐 Secure storage
 
 ## License
 
@@ -735,7 +807,7 @@ MIT License - See LICENSE file for details
 
 ## Contributing
 
-Contributions welcome! Platform-specific improvements and Web UI enhancements especially appreciated.
+Contributions welcome! Platform-specific improvements, Kubernetes enhancements, and Web UI improvements especially appreciated.
 
 ### Development Setup
 
@@ -767,15 +839,18 @@ mypy kcpwd/
 - [x] Web UI with FastAPI
 - [x] Password sharing
 - [x] Windows support
+- [x] Kubernetes integration
+- [x] Helm integration
 - [ ] Password history tracking
 - [ ] Browser extensions
 - [ ] Multi-user support
 - [ ] Cloud sync options
 - [ ] 2FA/OTP support
 - [ ] Mobile apps
-- [ ] Multi node sync
+- [ ] Multi-node sync
 - [ ] Advanced reporting and analytics
-
+- [ ] Kubernetes Operator
+- [ ] Terraform Provider
 
 ## Screenshots
 
@@ -786,6 +861,7 @@ $ kcpwd info
 ========================================
 Platform: Windows
 Supported: ✓ Yes
+
 🔐 Storage Backend
 ========================================
 Type: System Keyring
@@ -802,11 +878,13 @@ Beautiful, modern interface for managing your passwords:
 - Secure session management
 - Password sharing
 
+
 ## Support
 
--  [Documentation](https://github.com/osmanuygar/kcpwd)
--  [Issue Tracker](https://github.com/osmanuygar/kcpwd/issues)
--  [Discussions](https://github.com/osmanuygar/kcpwd/discussions)
+- 📖 [Documentation](https://github.com/osmanuygar/kcpwd)
+- 🐛 [Issue Tracker](https://github.com/osmanuygar/kcpwd/issues)
+- 💬 [Discussions](https://github.com/osmanuygar/kcpwd/discussions)
+
 
 ## Star History
 
