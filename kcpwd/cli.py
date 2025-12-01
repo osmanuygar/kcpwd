@@ -806,5 +806,197 @@ def watch(namespace, interval, prefix, kubeconfig):
         click.echo(click.style(f"✗ Error: {e}", fg='red'), err=True)
 
 
+@cli.group()
+def helm():
+    """Helm values integration commands"""
+    pass
+
+
+@helm.command()
+@click.argument('input_file', type=click.Path(exists=True))
+@click.option('--output', '-o', type=click.Path(), help='Output file path')
+@click.option('--strict/--no-strict', default=True, help='Fail on missing passwords')
+@click.option('--validate/--no-validate', default=True, help='Validate YAML syntax')
+def template(input_file, output, strict, validate):
+    """Process Helm values template with kcpwd references
+
+    Replaces {{ kcpwd('key') }} with actual passwords.
+
+    Examples:
+        kcpwd helm template values.yaml -o values-processed.yaml
+        kcpwd helm template values.yaml --no-strict
+    """
+    try:
+        from .helm import process_helm_values_file
+
+        click.echo(f"📋 Processing Helm values: {input_file}")
+
+        result = process_helm_values_file(
+            input_file=input_file,
+            output_file=output,
+            strict=strict,
+            validate_yaml=validate
+        )
+
+        if output:
+            click.echo(f"✓ Processed values written to: {output}")
+        else:
+            click.echo("\n" + "=" * 60)
+            import yaml
+            click.echo(yaml.dump(result, default_flow_style=False))
+            click.echo("=" * 60)
+
+    except Exception as e:
+        click.echo(f"✗ Failed to process values: {e}", err=True)
+        raise click.Abort()
+
+
+@helm.command()
+@click.argument('values_file', type=click.Path(exists=True))
+def scan(values_file):
+    """Scan Helm values for kcpwd references
+
+    Shows all {{ kcpwd('key') }} references found.
+
+    Example:
+        kcpwd helm scan values.yaml
+    """
+    try:
+        from .helm import scan_values_for_kcpwd_refs
+
+        with open(values_file, 'r') as f:
+            content = f.read()
+
+        refs = scan_values_for_kcpwd_refs(content)
+
+        if not refs:
+            click.echo("No kcpwd references found")
+            return
+
+        click.echo(f"\n📋 Found {len(refs)} kcpwd reference(s):\n")
+
+        for i, ref in enumerate(refs, 1):
+            click.echo(f"{i}. Key: {click.style(ref['key'], fg='green', bold=True)}")
+            if ref['needs_master']:
+                click.echo(f"   Master: {'Yes (inline)' if ref['master_inline'] else 'Yes (will prompt)'}")
+            click.echo(f"   Match: {ref['full_match']}")
+            click.echo()
+
+    except Exception as e:
+        click.echo(f"✗ Failed to scan values: {e}", err=True)
+        raise click.Abort()
+
+
+@helm.command()
+@click.argument('chart_dir', type=click.Path(exists=True))
+@click.option('--namespace', '-n', default='default', help='Kubernetes namespace')
+@click.option('--values', default='values.yaml', help='Values file name')
+@click.option('--release', help='Helm release name (for secret naming)')
+@click.option('--kubeconfig', type=click.Path(), help='Path to kubeconfig')
+def sync(chart_dir, namespace, values, release, kubeconfig):
+    """Sync Helm chart's kcpwd references to K8s secrets
+
+    Scans values.yaml for {{ kcpwd('key') }} references and syncs them to K8s.
+
+    Examples:
+        kcpwd helm sync ./mychart --namespace production
+        kcpwd helm sync ./mychart --release myapp --namespace prod
+    """
+    try:
+        from .helm import sync_helm_chart_secrets
+
+        click.echo(f"🔄 Syncing Helm chart secrets to Kubernetes...")
+        click.echo(f"   Chart: {chart_dir}")
+        click.echo(f"   Namespace: {namespace}")
+        if release:
+            click.echo(f"   Release: {release}")
+        click.echo()
+
+        result = sync_helm_chart_secrets(
+            chart_dir=chart_dir,
+            namespace=namespace,
+            values_file=values,
+            release_name=release,
+            kubeconfig=kubeconfig
+        )
+
+        if result['synced'] == 0:
+            click.echo("ℹ️  No kcpwd references found in values")
+            return
+
+        click.echo(f"\n✓ Sync complete:")
+        click.echo(f"  Synced: {result['synced']}")
+        click.echo(f"  Failed: {result['failed']}")
+
+        if result['references']:
+            click.echo(f"\n📋 Synced secrets:")
+            for ref in result['references']:
+                click.echo(f"  • {ref['key']} → {ref['secret_name']} ({ref['namespace']})")
+
+        if result['errors']:
+            click.echo(f"\n⚠️  Errors:")
+            for error in result['errors']:
+                click.echo(f"  • {error['key']}: {error['error']}", err=True)
+
+    except Exception as e:
+        click.echo(f"✗ Failed to sync: {e}", err=True)
+        raise click.Abort()
+
+
+@helm.command()
+def example():
+    """Generate example Helm values with kcpwd integration
+
+    Example:
+        kcpwd helm example > values.yaml
+    """
+    from .helm import generate_example_values
+
+    example = generate_example_values()
+    click.echo(example)
+
+
+@helm.command()
+@click.argument('output_dir', type=click.Path())
+def plugin(output_dir):
+    """Generate Helm plugin package
+
+    Creates files for helm-kcpwd plugin installation.
+
+    Example:
+        kcpwd helm plugin ./helm-kcpwd-plugin
+    """
+    try:
+        from .helm import create_helm_plugin_package
+        from pathlib import Path
+
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        click.echo(f"📦 Generating Helm plugin package...")
+
+        package = create_helm_plugin_package()
+
+        for filename, content in package.items():
+            file_path = output_path / filename
+            with open(file_path, 'w') as f:
+                f.write(content)
+
+            # Make shell scripts executable
+            if filename.endswith('.sh'):
+                file_path.chmod(0o755)
+
+            click.echo(f"✓ Created: {file_path}")
+
+        click.echo(f"\n✓ Helm plugin package created in: {output_path}")
+        click.echo(f"\nTo install:")
+        click.echo(f"  cd {output_path}")
+        click.echo(f"  helm plugin install .")
+
+    except Exception as e:
+        click.echo(f"✗ Failed to generate plugin: {e}", err=True)
+        raise click.Abort()
+
+
 if __name__ == '__main__':
     cli()

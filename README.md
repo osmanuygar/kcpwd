@@ -286,7 +286,95 @@ kcpwd ui
 # Open browser automatically (default: yes)
 kcpwd ui --no-open-browser  # Don't open browser
 ```
+# Insert this section in README.md after the "Features" section
 
+## 🚀 Kubernetes Integration (NEW in v0.8.0)
+
+**kcpwd now includes native Kubernetes support!** Sync passwords to/from Kubernetes secrets with zero additional infrastructure.
+
+### Quick Start
+
+```bash
+# Store password
+kcpwd set prod_db "my_secure_password"
+
+# Sync to Kubernetes
+kcpwd k8s sync prod_db --namespace production
+
+# That's it! Your password is now a Kubernetes secret
+```
+
+### Key Features
+
+- ✅ **Bi-directional sync** - kcpwd ↔ Kubernetes secrets
+- ✅ **Watch mode** - Auto-sync with configurable intervals
+- ✅ **Master password support** - Extra security layer
+- ✅ **GitOps friendly** - Works with ArgoCD, Flux, etc.
+- ✅ **CI/CD ready** - Perfect for deployment pipelines
+- ✅ **Zero infrastructure** - Just needs kubectl
+
+### Common Commands
+
+```bash
+# Sync single password
+kcpwd k8s sync prod_db --namespace production
+
+# Sync all passwords
+kcpwd k8s sync-all --namespace myapp
+
+# Import from Kubernetes
+kcpwd k8s import db-credentials --namespace production
+
+# List secrets
+kcpwd k8s list --namespace production
+
+# Watch mode (auto-sync every 60s)
+kcpwd k8s watch --namespace production
+```
+
+### CI/CD Example
+
+```yaml
+# GitHub Actions
+- name: Sync passwords to K8s
+  run: |
+    pip install kcpwd
+    kcpwd set db_password "${{ secrets.DB_PASSWORD }}"
+    kcpwd k8s sync-all --namespace production
+```
+
+### Use in Deployments
+
+```yaml
+# deployment.yaml
+env:
+- name: DB_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: prod-db  # Created by kcpwd
+      key: password
+```
+
+**📚 [Full Kubernetes Guide →](K8S_GUIDE.md)**
+
+### Why kcpwd for Kubernetes?
+
+| Feature | kcpwd | Vault | Sealed Secrets |
+|---------|-------|-------|----------------|
+| **Setup Time** | 0 minutes | Hours | 30+ minutes |
+| **Infrastructure** | None | Servers + DB | Controller |
+| **Learning Curve** | Minimal | Steep | Moderate |
+| **Local Dev** | ✅ Perfect | ⚠️ Complex | ❌ No |
+| **CI/CD** | ✅ Simple | ✅ Yes | ✅ Yes |
+
+Perfect for:
+-  Teams who want simple secret management
+-  CI/CD pipelines
+-  Multi-environment deployments
+-  GitOps workflows
+-  Local development that mirrors production
+
+---
 ### Library Usage
 
 #### Basic Operations
