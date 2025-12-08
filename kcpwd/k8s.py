@@ -564,3 +564,211 @@ def watch_and_sync(
 
     except KeyboardInterrupt:
         print("\n\n✓ Watch mode stopped")
+
+
+def diff_with_k8s(
+        namespace: str = "default",
+        prefix: Optional[str] = None,
+        kubeconfig: Optional[str] = None,
+        check_values: bool = True
+) -> Dict:
+    """Compare kcpwd secrets with Kubernetes secrets
+
+    Args:
+        namespace: K8s namespace to compare with
+        prefix: Only check secrets with this prefix
+        kubeconfig: Path to kubeconfig file
+        check_values: If True, compare actual values (slower but accurate)
+
+    Returns:
+        Dict with comparison results:
+        {
+            'in_sync': [str],              # Secrets that match
+            'value_differs': [str],        # Secrets with different values
+            'only_in_kcpwd': [str],       # Missing in K8s
+            'only_in_k8s': [str],         # Missing in kcpwd
+            'total_kcpwd': int,
+            'total_k8s': int,
+            'sync_percentage': float
+        }
+
+    Examples:
+        # Basic diff
+        result = diff_with_k8s(namespace="production")
+
+        # Only check specific prefix
+        result = diff_with_k8s(namespace="prod", prefix="prod_")
+
+        # Quick check without value comparison
+        result = diff_with_k8s(namespace="prod", check_values=False)
+    """
+    from .core import list_all_keys, get_password
+    from .master_protection import has_master_password, list_master_keys
+
+    # Initialize K8s client
+    client = K8sClient(namespace=namespace, kubeconfig=kubeconfig)
+
+    # Get all secrets from kcpwd
+    kcpwd_keys = list_all_keys()
+    master_keys = list_master_keys()
+    all_kcpwd_keys = set(kcpwd_keys + master_keys)
+
+    # Apply prefix filter
+    if prefix:
+        all_kcpwd_keys = {k for k in all_kcpwd_keys if k.startswith(prefix)}
+
+    # Get all secrets from K8s
+    try:
+        k8s_secrets = client.list_secrets()
+    except Exception as e:
+        raise K8sError(f"Failed to list K8s secrets: {e}")
+
+    # Convert K8s secret names to kcpwd format (- to _)
+    k8s_keys = {s.replace('-', '_'): s for s in k8s_secrets}
+
+    # Apply prefix filter to K8s keys
+    if prefix:
+        k8s_keys = {k: v for k, v in k8s_keys.items() if k.startswith(prefix)}
+
+    # Find differences
+    kcpwd_set = set(all_kcpwd_keys)
+    k8s_set = set(k8s_keys.keys())
+
+    only_in_kcpwd = list(kcpwd_set - k8s_set)
+    only_in_k8s = list(k8s_set - kcpwd_set)
+    in_both = list(kcpwd_set & k8s_set)
+
+    # Check values for secrets in both
+    in_sync = []
+    value_differs = []
+
+    if check_values and in_both:
+        for kcpwd_key in in_both:
+            k8s_secret_name = k8s_keys[kcpwd_key]
+
+            try:
+                # Get password from kcpwd
+                kcpwd_password = get_password(kcpwd_key)
+
+                # Get secret from K8s
+                k8s_data = client.get_secret(k8s_secret_name)
+                k8s_password = k8s_data.get('password') if k8s_data else None
+
+                if kcpwd_password and k8s_password:
+                    if kcpwd_password == k8s_password:
+                        in_sync.append(kcpwd_key)
+                    else:
+                        value_differs.append(kcpwd_key)
+                else:
+                    # One of them is None or doesn't have password key
+                    value_differs.append(kcpwd_key)
+
+            except Exception as e:
+                # If we can't compare, assume they differ
+                value_differs.append(kcpwd_key)
+    else:
+        # If not checking values, assume all in both are in sync
+        in_sync = in_both
+
+    # Calculate sync percentage
+    total_unique = len(kcpwd_set | k8s_set)
+    sync_count = len(in_sync)
+    sync_percentage = (sync_count / total_unique * 100) if total_unique > 0 else 100.0
+
+    return {
+        'in_sync': sorted(in_sync),
+        'value_differs': sorted(value_differs),
+        'only_in_kcpwd': sorted(only_in_kcpwd),
+        'only_in_k8s': sorted(only_in_k8s),
+        'total_kcpwd': len(kcpwd_set),
+        'total_k8s': len(k8s_set),
+        'sync_percentage': round(sync_percentage, 1)
+    }
+
+
+def get_drift_summary(diff_result: Dict) -> str:
+    """Generate human-readable drift summary
+
+    Args:
+        diff_result: Result from diff_with_k8s()
+
+    Returns:
+        Formatted summary string
+    """
+    lines = []
+    lines.append("=" * 60)
+    lines.append("📊 K8s DRIFT REPORT")
+    lines.append("=" * 60)
+    lines.append("")
+
+    # Summary stats
+    lines.append(f"Total in kcpwd:   {diff_result['total_kcpwd']}")
+    lines.append(f"Total in K8s:     {diff_result['total_k8s']}")
+    lines.append(f"Sync status:      {diff_result['sync_percentage']}% in sync")
+    lines.append("")
+
+    # In sync
+    in_sync_count = len(diff_result['in_sync'])
+    if in_sync_count > 0:
+        lines.append(f"✓ In Sync ({in_sync_count}):")
+        for key in diff_result['in_sync'][:5]:  # Show first 5
+            lines.append(f"  • {key}")
+        if in_sync_count > 5:
+            lines.append(f"  ... and {in_sync_count - 5} more")
+        lines.append("")
+
+    # Value differs
+    differs_count = len(diff_result['value_differs'])
+    if differs_count > 0:
+        lines.append(f"⚠️  Value Differs ({differs_count}):")
+        for key in diff_result['value_differs']:
+            lines.append(f"  • {key}")
+        lines.append("")
+
+    # Only in kcpwd
+    only_kcpwd_count = len(diff_result['only_in_kcpwd'])
+    if only_kcpwd_count > 0:
+        lines.append(f"📤 Only in kcpwd ({only_kcpwd_count}) - Not synced to K8s:")
+        for key in diff_result['only_in_kcpwd'][:10]:  # Show first 10
+            lines.append(f"  • {key}")
+        if only_kcpwd_count > 10:
+            lines.append(f"  ... and {only_kcpwd_count - 10} more")
+        lines.append("")
+
+    # Only in K8s
+    only_k8s_count = len(diff_result['only_in_k8s'])
+    if only_k8s_count > 0:
+        lines.append(f"📥 Only in K8s ({only_k8s_count}) - Not imported to kcpwd:")
+        for key in diff_result['only_in_k8s'][:10]:  # Show first 10
+            lines.append(f"  • {key}")
+        if only_k8s_count > 10:
+            lines.append(f"  ... and {only_k8s_count - 10} more")
+        lines.append("")
+
+    # Recommendations
+    if differs_count > 0 or only_kcpwd_count > 0 or only_k8s_count > 0:
+        lines.append("💡 RECOMMENDATIONS")
+        lines.append("-" * 60)
+
+        if differs_count > 0:
+            lines.append("• Values differ: Check which version is correct")
+            lines.append("  - To update K8s: kcpwd k8s sync <key> -n <namespace>")
+            lines.append("  - To update kcpwd: kcpwd k8s import <secret> -n <namespace>")
+            lines.append("")
+
+        if only_kcpwd_count > 0:
+            lines.append("• Missing in K8s: Sync to K8s if needed")
+            lines.append(f"  - kcpwd k8s sync-all -n <namespace>")
+            lines.append("")
+
+        if only_k8s_count > 0:
+            lines.append("• Missing in kcpwd: Import if needed")
+            lines.append(f"  - kcpwd k8s import <secret-name> -n <namespace>")
+            lines.append("")
+    else:
+        lines.append("✅ Everything is in sync!")
+        lines.append("")
+
+    lines.append("=" * 60)
+
+    return "\n".join(lines)

@@ -806,6 +806,94 @@ def watch(namespace, interval, prefix, kubeconfig):
         click.echo(click.style(f"✗ Error: {e}", fg='red'), err=True)
 
 
+@k8s.command(name='diff')
+@click.option('--namespace', '-n', default='default',
+              help='Kubernetes namespace to compare with')
+@click.option('--prefix', '-p',
+              help='Only check secrets with this prefix')
+@click.option('--kubeconfig',
+              help='Path to kubeconfig file')
+@click.option('--quick', is_flag=True,
+              help='Quick check without comparing values')
+@click.option('--format', '-f',
+              type=click.Choice(['table', 'json', 'summary']),
+              default='summary',
+              help='Output format (default: summary)')
+def diff(namespace, prefix, kubeconfig, quick, format):
+    """Compare kcpwd secrets with Kubernetes secrets
+
+    Shows which secrets are in sync, differ, or missing between
+    kcpwd and Kubernetes.
+
+    Examples:
+        # Basic diff
+        kcpwd k8s diff --namespace production
+
+        # Only check specific prefix
+        kcpwd k8s diff -n prod --prefix prod_
+
+        # Quick check (don't compare values)
+        kcpwd k8s diff -n prod --quick
+
+        # JSON output
+        kcpwd k8s diff -n prod --format json
+    """
+    try:
+        from .k8s import diff_with_k8s, get_drift_summary, K8sError
+        import json
+
+        click.echo(f"🔍 Comparing kcpwd with K8s namespace '{namespace}'...")
+        if prefix:
+            click.echo(f"   Prefix filter: {prefix}")
+        click.echo()
+
+        # Run diff
+        result = diff_with_k8s(
+            namespace=namespace,
+            prefix=prefix,
+            kubeconfig=kubeconfig,
+            check_values=not quick
+        )
+
+        # Output based on format
+        if format == 'json':
+            click.echo(json.dumps(result, indent=2))
+
+        elif format == 'table':
+            # Table format
+            click.echo("╔════════════════════════════════════════════════════════════╗")
+            click.echo("║                    DRIFT COMPARISON                        ║")
+            click.echo("╚════════════════════════════════════════════════════════════╝")
+            click.echo()
+
+            click.echo(f"{'Category':<30} {'Count':>10}")
+            click.echo("-" * 60)
+            click.echo(f"{'Total in kcpwd':<30} {result['total_kcpwd']:>10}")
+            click.echo(f"{'Total in K8s':<30} {result['total_k8s']:>10}")
+            click.echo(f"{'In sync':<30} {len(result['in_sync']):>10}")
+            click.echo(f"{'Value differs':<30} {len(result['value_differs']):>10}")
+            click.echo(f"{'Only in kcpwd':<30} {len(result['only_in_kcpwd']):>10}")
+            click.echo(f"{'Only in K8s':<30} {len(result['only_in_k8s']):>10}")
+            click.echo("-" * 60)
+            click.echo(f"{'Sync percentage':<30} {result['sync_percentage']:>9.1f}%")
+
+        else:  # summary (default)
+            summary = get_drift_summary(result)
+            click.echo(summary)
+
+        # Exit code based on sync status
+        if result['sync_percentage'] < 100:
+            # Has drift, exit with code 1
+            raise SystemExit(1)
+
+    except K8sError as e:
+        click.echo(click.style(f"✗ Kubernetes error: {e}", fg='red'), err=True)
+        raise click.Abort()
+    except Exception as e:
+        click.echo(click.style(f"✗ Error: {e}", fg='red'), err=True)
+        raise click.Abort()
+
+
 @cli.group()
 def helm():
     """Helm values integration commands"""
