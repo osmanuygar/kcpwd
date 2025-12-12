@@ -347,7 +347,7 @@ def create_helm_plugin_yaml() -> str:
         plugin.yaml content
     """
     plugin_yaml = """name: "kcpwd"
-version: "0.8.0"
+version: "0.8.1"
 usage: "Fetch secrets from kcpwd password manager"
 description: |-
   Helm plugin to integrate with kcpwd password manager.
