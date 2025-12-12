@@ -32,7 +32,7 @@ from .platform_utils import (
 
 
 @click.group()
-@click.version_option(version='0.8.0')
+@click.version_option(version='0.8.1')
 def cli():
     """kcpwd - Cross-platform Password Manager (macOS, Linux & Windows)"""
     # Check platform support
@@ -1084,6 +1084,186 @@ def plugin(output_dir):
     except Exception as e:
         click.echo(f"✗ Failed to generate plugin: {e}", err=True)
         raise click.Abort()
+
+
+@cli.command(name='export-env')
+@click.option('--keys', '-k', multiple=True, help='Specific keys to export (default: all)')
+@click.option('--prefix', '-p', default='', help='Prefix for variable names (e.g., "DB_")')
+@click.option('--uppercase/--no-uppercase', default=True, help='Convert variable names to uppercase')
+@click.option('--format', '-f',
+              type=click.Choice(['export', 'set', 'plain']),
+              default='export',
+              help='Output format: export (bash), set (windows), plain')
+def export_env(keys, prefix, uppercase, format):
+    """Export passwords as environment variables
+
+    Perfect for automation scripts and data pipelines.
+
+    Examples:
+        # Export all passwords
+        kcpwd export-env
+
+        # Export specific passwords
+        kcpwd export-env -k db_password -k api_key
+
+        # With prefix for organization
+        kcpwd export-env --prefix "PROD_"
+
+        # Windows format
+        kcpwd export-env --format set
+
+        # Use in bash scripts
+        eval $(kcpwd export-env)
+
+        # Lowercase variable names
+        kcpwd export-env --no-uppercase
+    """
+    try:
+        from .envexport import export_as_env
+
+        # Convert tuple to list or None
+        keys_list = list(keys) if keys else None
+
+        if keys_list:
+            click.echo(f"📤 Exporting {len(keys_list)} password(s) as environment variables...")
+        else:
+            click.echo(f"📤 Exporting all passwords as environment variables...")
+
+        if prefix:
+            click.echo(f"   Prefix: {prefix}")
+
+        exports = export_as_env(
+            keys=keys_list,
+            prefix=prefix,
+            uppercase=uppercase,
+            format_style=format
+        )
+
+        if not exports:
+            click.echo("No passwords found to export", err=True)
+            return
+
+        click.echo()
+
+        # Print exports
+        for export_line in exports.values():
+            click.echo(export_line)
+
+        click.echo()
+        click.echo(f"✓ Exported {len(exports)} environment variable(s)")
+
+        if format == 'export':
+            click.echo("\n💡 Usage in bash/zsh:")
+            click.echo("   eval $(kcpwd export-env)")
+        elif format == 'set':
+            click.echo("\n💡 Usage in Windows cmd:")
+            click.echo("   FOR /F %i IN ('kcpwd export-env --format set') DO %i")
+
+    except ImportError as e:
+        click.echo(f"✗ Error importing envexport module: {e}", err=True)
+    except Exception as e:
+        click.echo(f"✗ Error: {e}", err=True)
+
+
+@cli.command(name='generate-env')
+@click.argument('output_path', type=click.Path(), default='.env')
+@click.option('--keys', '-k', multiple=True, help='Specific keys to include (default: all)')
+@click.option('--prefix', '-p', default='', help='Prefix for variable names')
+@click.option('--uppercase/--no-uppercase', default=True, help='Convert names to uppercase')
+@click.option('--no-comments', is_flag=True, help='Skip header comments')
+@click.option('--force', '-f', is_flag=True, help='Overwrite existing file')
+def generate_env_file(output_path, keys, prefix, uppercase, no_comments, force):
+    """Generate .env file from stored passwords
+
+    Creates .env files for Docker, Python apps, and local development.
+
+    Examples:
+        # Basic .env file
+        kcpwd generate-env
+
+        # Custom output
+        kcpwd generate-env database.env
+
+        # Only specific keys
+        kcpwd generate-env -k db_host -k db_pass
+
+        # With prefix
+        kcpwd generate-env --prefix "AIRFLOW_"
+
+        # Multiple .env files for different environments
+        kcpwd generate-env prod.env --prefix "PROD_"
+        kcpwd generate-env dev.env --prefix "DEV_"
+    """
+    try:
+        from .envexport import generate_env_file as gen_env
+        import os
+
+        # Check if file exists
+        if os.path.exists(output_path) and not force:
+            if not click.confirm(f"File '{output_path}' exists. Overwrite?"):
+                click.echo("Cancelled")
+                return
+
+        # Warning about plain text
+        click.echo(click.style("⚠️  WARNING: .env file will contain passwords in PLAIN TEXT!",
+                               fg='yellow', bold=True))
+        click.echo("Make sure to:")
+        click.echo("  • Add .env to .gitignore")
+        click.echo("  • Use proper file permissions (chmod 600)")
+        click.echo("  • Never commit to version control\n")
+
+        if not force and not click.confirm("Continue?"):
+            click.echo("Cancelled")
+            return
+
+        # Convert tuple to list or None
+        keys_list = list(keys) if keys else None
+
+        if keys_list:
+            click.echo(f"\n📝 Generating .env with {len(keys_list)} password(s)...")
+        else:
+            click.echo(f"\n📝 Generating .env with all passwords...")
+
+        # Generate file
+        result = gen_env(
+            output_path=output_path,
+            keys=keys_list,
+            prefix=prefix,
+            uppercase=uppercase,
+            include_comments=not no_comments
+        )
+
+        if result['success']:
+            click.echo(f"✓ {result['message']}")
+
+            # Set file permissions on Unix systems
+            if os.name != 'nt':
+                try:
+                    os.chmod(output_path, 0o600)
+                    click.echo(f"✓ File permissions set to 600 (read/write for owner only)")
+                except Exception:
+                    pass
+
+            if result.get('failed'):
+                click.echo(f"\n⚠️  Failed to export: {', '.join(result['failed'])}", err=True)
+
+            click.echo(f"\n💡 Usage:")
+            click.echo(f"   # Load in bash/zsh")
+            click.echo(f"   source {output_path}")
+            click.echo(f"   # Or: export $(cat {output_path} | xargs)")
+            click.echo(f"\n   # Python (with python-dotenv)")
+            click.echo(f"   from dotenv import load_dotenv")
+            click.echo(f"   load_dotenv('{output_path}')")
+            click.echo(f"\n   # Docker Compose")
+            click.echo(f"   env_file: {output_path}")
+
+        else:
+            click.echo(f"✗ {result['message']}", err=True)
+
+    except ImportError as e:
+        click.echo(f"✗ Error importing envexport module: {e}", err=True)
+    except Exception as e:
+        click.echo(f"✗ Error: {e}", err=True)
 
 
 if __name__ == '__main__':

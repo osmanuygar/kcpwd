@@ -391,6 +391,33 @@ kcpwd ui
 # Open browser automatically (default: yes)
 kcpwd ui --no-open-browser  # Don't open browser
 ```
+#### Exporting Passwords
+```bash
+# Export environment variables
+kcpwd export-env [OPTIONS]
+  -k, --keys TEXT         Specific keys to export
+  -p, --prefix TEXT       Variable name prefix
+  --uppercase/--no-uppercase  Convert to uppercase (default: yes)
+  -f, --format [export|set|plain]  Output format
+
+# Generate .env file
+kcpwd generate-env [OUTPUT_PATH] [OPTIONS]
+  -k, --keys TEXT         Specific keys to include
+  -p, --prefix TEXT       Variable name prefix
+  --uppercase/--no-uppercase  Convert to uppercase
+  --no-comments          Skip header comments
+  -f, --force            Overwrite without confirmation
+```
+
+```bash
+# Store credentials
+kcpwd set aws_key AKIAIOSFODNN7EXAMPLE
+kcpwd set aws_secret wJalrXUtnFEMI/K7MDENG
+
+# Export and use
+eval $(kcpwd export-env --prefix "SPARK_")
+pyspark --conf "spark.hadoop.fs.s3a.access.key=$SPARK_AWS_KEY"
+```
 
 ### Library Usage
 
@@ -730,6 +757,7 @@ That's it! Your password is now a Kubernetes secret.
 
 
 ## Changelog
+
 
 ### v0.8.0 (LATEST) - Kubernetes & Helm Integration 🚀
 - 🎯 **Native Kubernetes support** - Sync passwords to/from K8s secrets

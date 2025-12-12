@@ -91,7 +91,7 @@ def verify_session(token: str) -> bool:
 app = FastAPI(
     title="kcpwd Web UI",
     description="Password Manager Web Interface with Sharing",
-    version="0.8.0",
+    version="0.8.1",
     docs_url="/api/docs" if UIConfig.DEBUG else None,
     redoc_url="/api/redoc" if UIConfig.DEBUG else None,
 )
