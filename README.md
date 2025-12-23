@@ -754,8 +754,6 @@ That's it! Your password is now a Kubernetes secret.
 - ✅ **Label management** - Add custom labels to secrets
 
 
-
-
 ## Changelog
 
 
